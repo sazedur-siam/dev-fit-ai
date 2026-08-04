@@ -1,9 +1,34 @@
-import { getAllDevelopers } from "@/lib/developerHelpers";
+import { redirect } from "next/navigation";
+import { getAllDevelopers } from "@/lib/db/developers";
 import { DeveloperBrowser } from "@/components/DeveloperBrowser";
+import { getCurrentUser } from "@/lib/session";
 import Link from "next/link";
 
-export default function HomePage() {
-  const devs = getAllDevelopers();
+// The cohort lives in MongoDB now, so this page reads per request.
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  // Everything is behind the login — there are no public pages.
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
+  const devs = await getAllDevelopers();
+
+  if (devs.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-ink-200 bg-white p-10 text-center">
+        <h1 className="text-xl font-semibold text-ink-900">No developers yet</h1>
+        <p className="mx-auto mt-2 max-w-md text-sm text-ink-600">
+          The cohort is stored in MongoDB. Seed it with{" "}
+          <code className="rounded bg-ink-100 px-1.5 py-0.5 text-xs">
+            npm run seed
+          </code>{" "}
+          and reload.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <section className="rounded-2xl border border-ink-200 bg-white p-6">

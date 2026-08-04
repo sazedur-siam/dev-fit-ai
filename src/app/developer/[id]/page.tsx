@@ -1,19 +1,27 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import { ArchetypeBadge } from "@/components/ArchetypeBadge";
-import { getDeveloperById, getAllDevelopers } from "@/lib/developerHelpers";
+import { getDeveloperById } from "@/lib/db/developers";
+import { getCurrentUser } from "@/lib/session";
 
-export function generateStaticParams() {
-  return getAllDevelopers().map((d) => ({ id: d.id }));
-}
+/**
+ * `generateStaticParams` was removed when the cohort moved to MongoDB:
+ * prerendering would have required a database connection at build time, and the
+ * cohort is now editable at runtime, so a build-time snapshot would go stale.
+ */
+export const dynamic = "force-dynamic";
 
 export default async function DeveloperDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
   const { id } = await params;
-  const dev = getDeveloperById(id);
+  const dev = await getDeveloperById(id);
   if (!dev) return notFound();
   const net = dev.linesAdded - dev.linesDeleted;
 

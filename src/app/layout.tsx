@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { cookies } from "next/headers";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { AppShell } from "@/components/AppShell";
+import { SIDEBAR_COOKIE } from "@/lib/types";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -8,40 +12,34 @@ export const metadata: Metadata = {
     "Rank developers against a target repo. Decision support for reassignments.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Read from the JWT rather than the database: this runs on every page render,
+  // and the role here only decides which nav items to show. Every privileged page
+  // and route re-checks against MongoDB.
+  const session = await getServerSession(authOptions);
+  const user = session?.user;
+
+  // Server-side so the sidebar paints at its stored width immediately — a
+  // client-only preference would flash expanded on every navigation.
+  const collapsed =
+    (await cookies()).get(SIDEBAR_COOKIE)?.value === "collapsed";
+
   return (
     <html lang="en">
       <body>
-        <header className="border-b border-ink-200 bg-white">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-            <Link
-              href="/"
-              className="flex items-center gap-2 text-lg font-semibold tracking-tight"
-            >
-              <span className="inline-block h-3 w-3 rounded-full bg-pine-500" />
-              DevFit
-            </Link>
-            <nav className="flex items-center gap-6 text-sm">
-              <Link href="/" className="text-ink-600 hover:text-ink-900">
-                Developers
-              </Link>
-              <Link
-                href="/fit"
-                className="rounded-md bg-pine-600 px-3 py-1.5 font-medium text-white hover:bg-pine-700"
-              >
-                Check fit
-              </Link>
-            </nav>
-          </div>
-        </header>
-        <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
-        <footer className="mx-auto max-w-6xl px-6 pb-10 pt-4 text-xs text-ink-400">
-          Prototype · Decision support for humans, not an automated pass/fail.
-        </footer>
+        {user ? (
+          <AppShell user={user} defaultCollapsed={collapsed}>
+            {children}
+          </AppShell>
+        ) : (
+          // Signed out, the only reachable page is /login — no chrome, just the
+          // centered card.
+          <main className="mx-auto w-full max-w-6xl px-6 py-16">{children}</main>
+        )}
       </body>
     </html>
   );
