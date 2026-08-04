@@ -1,5 +1,5 @@
 import { getAllDevelopers } from "@/lib/developerHelpers";
-import { DeveloperCard } from "@/components/DeveloperCard";
+import { DeveloperBrowser } from "@/components/DeveloperBrowser";
 import Link from "next/link";
 
 export default function HomePage() {
@@ -10,12 +10,13 @@ export default function HomePage() {
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-ink-900">
-              Strativ developers
+              Developers List
             </h1>
             <p className="mt-1 max-w-2xl text-sm text-ink-600">
-              A seeded set of 10 developers. Open one to see their contribution
-              profile, or paste a repo URL on <span className="font-medium">Check fit</span> to
-              see who fits it best.
+              A seeded set of {devs.length} developers. Filter by name or stack,
+              open one to see their contribution profile, or paste a repo URL on{" "}
+              <span className="font-medium">Check fit</span> to see who fits it
+              best.
             </p>
           </div>
           <Link
@@ -27,11 +28,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {devs.map((d) => (
-          <DeveloperCard key={d.id} dev={d} />
-        ))}
-      </section>
+      <DeveloperBrowser developers={devs} />
     </div>
   );
 }
