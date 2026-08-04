@@ -52,6 +52,26 @@ export interface FitRanking {
   topPickId: string;
 }
 
+/** One repository visible to the configured GITHUB_TOKEN. */
+export interface ViewerRepo {
+  fullName: string;
+  name: string;
+  owner: string;
+  description: string | null;
+  language: string | null;
+  isPrivate: boolean;
+  isFork: boolean;
+  htmlUrl: string;
+  updatedAt: string;
+  stars: number;
+}
+
+/** Response shape of GET /api/repos. */
+export interface ViewerRepoList {
+  login: string;
+  repos: ViewerRepo[];
+}
+
 /** Shape the /explain Gemini call must return. */
 export interface GeminiExplanationResponse {
   explanations: { devId: string; explanation: string }[];

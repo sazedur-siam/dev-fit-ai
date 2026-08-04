@@ -1,4 +1,5 @@
 import { DIGEST_LIMITS } from "@/lib/config";
+import type { ViewerRepo, ViewerRepoList } from "@/lib/types";
 
 const IGNORED_DIRS = new Set([
   "node_modules",
@@ -78,7 +79,7 @@ function ghHeaders(): HeadersInit {
   const headers: HeadersInit = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "devfit-hackathon",
+    "User-Agent": "devfit",
   };
   const token = process.env.GITHUB_TOKEN;
   if (token) (headers as Record<string, string>).Authorization = `Bearer ${token}`;
@@ -95,6 +96,67 @@ async function gh<T>(path: string): Promise<T> {
     );
   }
   return res.json() as Promise<T>;
+}
+
+interface GitHubRepoPayload {
+  full_name: string;
+  name: string;
+  owner: { login: string };
+  description: string | null;
+  language: string | null;
+  private: boolean;
+  fork: boolean;
+  html_url: string;
+  updated_at: string;
+  pushed_at?: string;
+  stargazers_count: number;
+}
+
+const REPO_PAGE_SIZE = 100;
+const REPO_MAX_PAGES = 3; // up to 300 repos — plenty, and bounds the rate-limit cost
+
+/**
+ * Repositories the configured GITHUB_TOKEN can see, newest-push first.
+ *
+ * This is deliberately token-scoped rather than user-scoped: there is no auth in
+ * this app, so "the current user" means "whoever owns GITHUB_TOKEN". A
+ * fine-grained token only ever returns what it was granted — a
+ * public-repos-read-only token will not list private repos, and that is the
+ * token's doing, not a bug here.
+ */
+export async function listViewerRepos(): Promise<ViewerRepoList> {
+  if (!process.env.GITHUB_TOKEN) {
+    throw new GitHubError(
+      "GITHUB_TOKEN is not set, so there is no account to list repositories for. Add a token to .env.local — see .env.local.example.",
+      401
+    );
+  }
+
+  const viewer = await gh<{ login: string }>("/user");
+
+  const repos: ViewerRepo[] = [];
+  for (let page = 1; page <= REPO_MAX_PAGES; page += 1) {
+    const batch = await gh<GitHubRepoPayload[]>(
+      `/user/repos?per_page=${REPO_PAGE_SIZE}&page=${page}&sort=pushed&affiliation=owner,collaborator,organization_member`
+    );
+    repos.push(
+      ...batch.map((r) => ({
+        fullName: r.full_name,
+        name: r.name,
+        owner: r.owner?.login ?? "",
+        description: r.description,
+        language: r.language,
+        isPrivate: r.private,
+        isFork: r.fork,
+        htmlUrl: r.html_url,
+        updatedAt: r.pushed_at || r.updated_at,
+        stars: r.stargazers_count ?? 0,
+      }))
+    );
+    if (batch.length < REPO_PAGE_SIZE) break;
+  }
+
+  return { login: viewer.login, repos };
 }
 
 /** Parse `https://github.com/owner/repo(.git)?(/...)?` → { owner, repo }. */
@@ -171,7 +233,7 @@ async function fetchRawFile(
   const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "devfit-hackathon",
+      "User-Agent": "devfit",
       ...(process.env.GITHUB_TOKEN
         ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
         : {}),

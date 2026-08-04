@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ArchetypeBadge } from "@/components/ArchetypeBadge";
 import { VerdictBadge } from "@/components/VerdictBadge";
 import { SubScoreBar } from "@/components/SubScoreBar";
+import { FullScreenLoader } from "@/components/FullScreenLoader";
+import { RepoPicker } from "@/components/RepoPicker";
 import type { DeveloperView, FitScore, RepoRequirement } from "@/lib/types";
 
 interface FitResponse {
@@ -31,9 +33,8 @@ export default function FitPage() {
 
   const urlValid = useMemo(() => isValidRepoUrl(repoUrl), [repoUrl]);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!urlValid) {
+  async function runFit(url: string) {
+    if (!isValidRepoUrl(url)) {
       setState({
         kind: "error",
         message: "Paste a full GitHub URL like https://github.com/owner/repo",
@@ -52,7 +53,7 @@ export default function FitPage() {
       const res = await fetch("/api/fit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl }),
+        body: JSON.stringify({ repoUrl: url }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Fit request failed");
@@ -67,6 +68,11 @@ export default function FitPage() {
         message: err instanceof Error ? err.message : "Something went wrong",
       });
     }
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    void runFit(repoUrl);
   }
 
   return (
@@ -104,19 +110,18 @@ export default function FitPage() {
             Doesn&rsquo;t look like a GitHub repo URL yet.
           </p>
         )}
+
+        <RepoPicker
+          onSelect={setRepoUrl}
+          disabled={state.kind === "loading"}
+        />
       </section>
 
       {state.kind === "loading" && (
-        <div className="mt-6 rounded-xl border border-ink-200 bg-white p-6 text-sm text-ink-600">
-          <div className="flex items-center gap-3">
-            <span className="h-3 w-3 animate-pulse rounded-full bg-pine-500" />
-            <span>{state.message}</span>
-          </div>
-          <p className="mt-2 text-xs text-ink-400">
-            Fetching the repo tree and up to 20 key files, then two Gemini calls.
-            Usually 5&ndash;20 seconds.
-          </p>
-        </div>
+        <FullScreenLoader
+          message={state.message}
+          hint="Fetching the repo tree and up to 20 key files, then two Gemini calls. Usually 5–30 seconds."
+        />
       )}
 
       {state.kind === "error" && (
