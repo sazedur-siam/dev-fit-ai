@@ -1,4 +1,3 @@
-import { DEVELOPERS } from "@/data/developers";
 import type { DeveloperView, MockDeveloper } from "@/lib/types";
 
 /**
@@ -25,11 +24,8 @@ export function toView(dev: MockDeveloper): DeveloperView {
   };
 }
 
-export function getAllDevelopers(): DeveloperView[] {
-  return DEVELOPERS.map(toView);
-}
-
-export function getDeveloperById(id: string): DeveloperView | undefined {
-  const raw = DEVELOPERS.find((d) => d.id === id);
-  return raw ? toView(raw) : undefined;
-}
+/**
+ * Lookups moved to `@/lib/db/developers` when the cohort became a MongoDB
+ * collection. This module is now pure derivation, so it stays trivially
+ * testable and free of I/O.
+ */

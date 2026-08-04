@@ -9,6 +9,7 @@ import type {
   RepoRequirement,
 } from "@/lib/types";
 import { rankCohort } from "@/lib/scoring";
+import type { ResolvedCredentials } from "@/lib/credentials";
 
 const ARCHETYPES: Archetype[] = ["frontend", "backend", "fullstack"];
 const COMPLEXITIES: Complexity[] = ["low", "moderate", "high"];
@@ -21,11 +22,14 @@ function fallbackLanguagesFromBytes(bytes: Record<string, number>): string[] {
 }
 
 /** Ask Gemini for a RepoRequirement given a digest. Applies safe defaults. */
-export async function analyzeRepo(repoUrl: string): Promise<{
+export async function analyzeRepo(
+  repoUrl: string,
+  creds: ResolvedCredentials
+): Promise<{
   requirement: RepoRequirement;
   digestMeta: { owner: string; repo: string; fileCount: number };
 }> {
-  const digestObj = await buildRepoDigest(repoUrl);
+  const digestObj = await buildRepoDigest(repoUrl, creds.githubToken);
 
   const prompt = `You are a senior tech lead. Read the digest of a public GitHub repo below and describe what kind of developer this codebase needs.
 
@@ -49,7 +53,10 @@ Rules:
 ${digestObj.digest}
 --- DIGEST END ---`;
 
-  const raw = await geminiJSON<Partial<RepoRequirement>>(prompt);
+  const raw = await geminiJSON<Partial<RepoRequirement>>(
+    prompt,
+    creds.geminiApiKey
+  );
 
   // Coerce & fill defaults
   const languages = Array.isArray(raw.languages) && raw.languages.length > 0
@@ -93,7 +100,8 @@ ${digestObj.digest}
 export async function explainRanking(
   requirement: RepoRequirement,
   ranked: Omit<FitScore, "explanation">[],
-  cohort: DeveloperView[]
+  cohort: DeveloperView[],
+  creds: ResolvedCredentials
 ): Promise<GeminiExplanationResponse> {
   const cohortLite = cohort.map((d) => ({
     id: d.id,
@@ -144,7 +152,10 @@ Rules:
 - Never contradict the numeric verdict.
 - Be specific. No filler ("This developer would be a great addition"). Aim for review-caliber sharpness.`;
 
-  const raw = await geminiJSON<Partial<GeminiExplanationResponse>>(prompt);
+  const raw = await geminiJSON<Partial<GeminiExplanationResponse>>(
+    prompt,
+    creds.geminiApiKey
+  );
   const explanations = Array.isArray(raw.explanations) ? raw.explanations : [];
   const explanationById = new Map(
     explanations
@@ -169,13 +180,18 @@ Rules:
 }
 
 /** End-to-end: repoUrl → RepoRequirement + ranked FitScore[] + topPickId. */
-export async function analyzeAndRank(repoUrl: string, cohort: DeveloperView[]) {
-  const { requirement } = await analyzeRepo(repoUrl);
+export async function analyzeAndRank(
+  repoUrl: string,
+  cohort: DeveloperView[],
+  creds: ResolvedCredentials
+) {
+  const { requirement, digestMeta } = await analyzeRepo(repoUrl, creds);
   const rankedBase = rankCohort(cohort, requirement);
   const { explanations, topPickRationale } = await explainRanking(
     requirement,
     rankedBase,
-    cohort
+    cohort,
+    creds
   );
   const explanationMap = new Map(explanations.map((e) => [e.devId, e.explanation]));
 
@@ -189,5 +205,6 @@ export async function analyzeAndRank(repoUrl: string, cohort: DeveloperView[]) {
     ranked,
     topPickId: ranked[0]?.devId ?? "",
     topPickRationale,
+    digestMeta,
   };
 }

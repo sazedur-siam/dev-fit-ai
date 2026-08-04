@@ -75,19 +75,26 @@ class GitHubError extends Error {
 
 const GH_BASE = "https://api.github.com";
 
-function ghHeaders(): HeadersInit {
+/**
+ * The token is threaded through every call rather than read from the environment:
+ * each signed-in user stores their own, so there is no ambient token to reach for.
+ * Passing nothing is valid — GitHub allows 60 unauthenticated requests/hour.
+ */
+function ghHeaders(token?: string | null): HeadersInit {
   const headers: HeadersInit = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
     "User-Agent": "devfit",
   };
-  const token = process.env.GITHUB_TOKEN;
-  if (token) (headers as Record<string, string>).Authorization = `Bearer ${token}`;
+  const trimmed = token?.trim();
+  if (trimmed) {
+    (headers as Record<string, string>).Authorization = `Bearer ${trimmed}`;
+  }
   return headers;
 }
 
-async function gh<T>(path: string): Promise<T> {
-  const res = await fetch(`${GH_BASE}${path}`, { headers: ghHeaders() });
+async function gh<T>(path: string, token?: string | null): Promise<T> {
+  const res = await fetch(`${GH_BASE}${path}`, { headers: ghHeaders(token) });
   if (!res.ok) {
     const body = await res.text();
     throw new GitHubError(
@@ -124,20 +131,23 @@ const REPO_MAX_PAGES = 3; // up to 300 repos — plenty, and bounds the rate-lim
  * public-repos-read-only token will not list private repos, and that is the
  * token's doing, not a bug here.
  */
-export async function listViewerRepos(): Promise<ViewerRepoList> {
-  if (!process.env.GITHUB_TOKEN) {
+export async function listViewerRepos(
+  token: string | null | undefined
+): Promise<ViewerRepoList> {
+  if (!token?.trim()) {
     throw new GitHubError(
-      "GITHUB_TOKEN is not set, so there is no account to list repositories for. Add a token to .env.local — see .env.local.example.",
+      "No GitHub token available, so there is no account to list repositories for. Add one on the Settings page, or set GITHUB_TOKEN in .env.local.",
       401
     );
   }
 
-  const viewer = await gh<{ login: string }>("/user");
+  const viewer = await gh<{ login: string }>("/user", token);
 
   const repos: ViewerRepo[] = [];
   for (let page = 1; page <= REPO_MAX_PAGES; page += 1) {
     const batch = await gh<GitHubRepoPayload[]>(
-      `/user/repos?per_page=${REPO_PAGE_SIZE}&page=${page}&sort=pushed&affiliation=owner,collaborator,organization_member`
+      `/user/repos?per_page=${REPO_PAGE_SIZE}&page=${page}&sort=pushed&affiliation=owner,collaborator,organization_member`,
+      token
     );
     repos.push(
       ...batch.map((r) => ({
@@ -228,15 +238,14 @@ async function fetchRawFile(
   owner: string,
   repo: string,
   branch: string,
-  path: string
+  path: string,
+  token?: string | null
 ): Promise<string> {
   const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
   const res = await fetch(url, {
     headers: {
       "User-Agent": "devfit",
-      ...(process.env.GITHUB_TOKEN
-        ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
-        : {}),
+      ...(token?.trim() ? { Authorization: `Bearer ${token.trim()}` } : {}),
     },
   });
   if (!res.ok) return "";
@@ -250,16 +259,21 @@ async function fetchRawFile(
 /**
  * Build the repo digest string sent to Gemini for analysis. See spec Step 1.
  */
-export async function buildRepoDigest(repoUrl: string): Promise<RepoDigest> {
+export async function buildRepoDigest(
+  repoUrl: string,
+  token?: string | null
+): Promise<RepoDigest> {
   const { owner, repo } = parseRepoUrl(repoUrl);
 
   const meta = await gh<{ default_branch: string; description?: string | null }>(
-    `/repos/${owner}/${repo}`
+    `/repos/${owner}/${repo}`,
+    token
   );
   const defaultBranch = meta.default_branch;
 
   const tree = await gh<{ tree: GitHubTreeEntry[]; truncated?: boolean }>(
-    `/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`
+    `/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`,
+    token
   );
 
   const kept = tree.tree.filter((e) => !isIgnoredPath(e.path));
@@ -271,14 +285,15 @@ export async function buildRepoDigest(repoUrl: string): Promise<RepoDigest> {
   const picks = pickInterestingFiles(kept);
   const filesInlined: { path: string; content: string }[] = [];
   for (const p of picks) {
-    const content = await fetchRawFile(owner, repo, defaultBranch, p.path);
+    const content = await fetchRawFile(owner, repo, defaultBranch, p.path, token);
     if (content) filesInlined.push({ path: p.path, content });
   }
 
   let languageBytes: Record<string, number> = {};
   try {
     languageBytes = await gh<Record<string, number>>(
-      `/repos/${owner}/${repo}/languages`
+      `/repos/${owner}/${repo}/languages`,
+      token
     );
   } catch {
     languageBytes = {};

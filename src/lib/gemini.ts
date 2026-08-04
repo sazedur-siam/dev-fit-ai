@@ -23,22 +23,29 @@ interface GeminiResponse {
   promptFeedback?: { blockReason?: string };
 }
 
-function ensureKey(): string {
-  const key = process.env.GEMINI_API_KEY;
+function ensureKey(apiKey: string | null | undefined): string {
+  const key = apiKey?.trim();
   if (!key) {
     throw new GeminiError(
-      "GEMINI_API_KEY is not set. Copy .env.local.example → .env.local and paste your key from https://aistudio.google.com/app/apikey"
+      "No Gemini API key available. Add one on the Settings page, or set GEMINI_API_KEY in .env.local. Get a key at https://aistudio.google.com/app/apikey"
     );
   }
   return key;
 }
 
 /**
- * Call Gemini and get the raw text back. Model default is `gemini-2.5-flash`
- * (free tier); override with GEMINI_MODEL env var.
+ * Call Gemini and get the raw text back.
+ *
+ * The key is passed in rather than read from the environment: each signed-in user
+ * stores their own credential, so there is no single ambient key to reach for.
+ * Model default lives in config.ts; override with the GEMINI_MODEL env var.
  */
-async function geminiText(prompt: string, opts?: { jsonMode?: boolean }) {
-  const key = ensureKey();
+async function geminiText(
+  prompt: string,
+  apiKey: string | null | undefined,
+  opts?: { jsonMode?: boolean }
+) {
+  const key = ensureKey(apiKey);
   const url = `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent?key=${key}`;
 
   const body: Record<string, unknown> = {
@@ -98,15 +105,18 @@ function stripFences(text: string): string {
  * Ask Gemini for JSON, parse it. Retries once with a stricter reminder on
  * parse failure — the fragile part of this app.
  */
-export async function geminiJSON<T>(prompt: string): Promise<T> {
-  const first = await geminiText(prompt, { jsonMode: true });
+export async function geminiJSON<T>(
+  prompt: string,
+  apiKey: string | null | undefined
+): Promise<T> {
+  const first = await geminiText(prompt, apiKey, { jsonMode: true });
   try {
     return JSON.parse(stripFences(first)) as T;
   } catch {
     const retryPrompt = `${prompt}
 
 IMPORTANT: Your previous response was not valid JSON. Return ONLY a single JSON object with no prose, no markdown fences, no comments. Do not wrap it in \`\`\`. Just the JSON.`;
-    const second = await geminiText(retryPrompt, { jsonMode: true });
+    const second = await geminiText(retryPrompt, apiKey, { jsonMode: true });
     return JSON.parse(stripFences(second)) as T;
   }
 }
