@@ -2,7 +2,7 @@
 
 # DevFit
 
-Internal Strativ hackathon app. Paste a public GitHub repo URL → the app builds a
+Paste a public GitHub repo URL → the app builds a
 digest of the repo, asks Gemini what kind of developer it needs, scores 10 seeded
 developers against that requirement with **deterministic** sub-scores, and returns
 a ranked fit list with plain-language explanations.
@@ -65,8 +65,8 @@ orchestrator and the only place that composes all of the above.
 | [src/lib/analyzer.ts](src/lib/analyzer.ts) | Prompts + orchestration. |
 | [src/lib/developerHelpers.ts](src/lib/developerHelpers.ts) | `MockDeveloper` → `DeveloperView` (derives `languages`, `netLines`). |
 | [src/data/developers.ts](src/data/developers.ts) | 10 seeded developers: 4 frontend, 3 backend, 3 fullstack. |
-| [src/app/api/](src/app/api/) | Three route handlers, all `runtime = "nodejs"`. |
-| [src/components/](src/components/) | Presentational only — no data fetching. |
+| [src/app/api/](src/app/api/) | Four route handlers, all `runtime = "nodejs"`. |
+| [src/components/](src/components/) | Mostly presentational; `DeveloperBrowser` and `RepoPicker` are the two client components that hold state. |
 
 Always consume developers through `getAllDevelopers()` / `getDeveloperById()`, never
 by importing `DEVELOPERS` directly — the helpers derive `languages` and `netLines`
@@ -101,11 +101,26 @@ that look like bugs but are deliberate, and one that is a genuine wart:
 | Var | Required | Notes |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | Yes, for `/api/analyze` + `/api/fit` | Missing key surfaces as a 500 with a copy-paste-able fix message. |
-| `GITHUB_TOKEN` | No | Unauthenticated GitHub is **60 req/hr**. One digest costs 3 REST calls, so ~20 repos/hr. Raw file fetches go to `raw.githubusercontent.com` and don't spend that quota. |
-| `GEMINI_MODEL` | No | Defaults to `gemini-2.5-flash`. |
+| `GITHUB_TOKEN` | Optional for analysis, **required** for `/api/repos` | Unauthenticated GitHub is **60 req/hr**. One digest costs 3 REST calls, so ~20 repos/hr. Raw file fetches go to `raw.githubusercontent.com` and don't spend that quota. |
+| `GEMINI_MODEL` | No | Defaults to `gemini-3.6-flash`. |
+
+**Model names rot.** `gemini-2.5-flash` (the original default) now returns HTTP 404
+`"no longer available to new users"` on new API keys. Two traps when re-picking one:
+`GET /v1beta/models` still *lists* retired models, so listing is not proof a model
+works; and some models (`gemini-3.5-flash-lite`) return 200 with **empty content**,
+which `geminiText()` throws on. Always probe a candidate with a real
+`generateContent` call using `responseMimeType: application/json` before adopting it.
+`gemini-flash-latest` is the alias to use if you'd rather not revisit this.
 
 `/` and `/developer/[id]` need no keys at all — they render from seed data, so the
 UI is always demoable even with no network.
+
+**There is no user auth, and `/api/repos` does not add any.** "The current user" is
+whoever owns `GITHUB_TOKEN`, so the repo picker lists that token's repositories for
+everyone who opens the app. A fine-grained token returns only what it was granted —
+a public-repos-read-only token will not list private repos, which is the token's
+scope, not a bug. If this ever needs to be per-visitor, that's a GitHub OAuth flow,
+not an extension of this route.
 
 ## Toolchain — read before bumping anything
 
@@ -184,8 +199,12 @@ Smaller notes:
   not relative paths, except within `src/components/`.
 - Named exports for components and lib functions; default exports only where
   Next requires them (pages, layouts, route handlers).
-- Server-first: only [src/app/fit/page.tsx](src/app/fit/page.tsx) is `"use client"`.
-  Keep components in `src/components/` presentational and prop-driven.
+- Server-first. Three files are `"use client"`:
+  [fit/page.tsx](src/app/fit/page.tsx), [DeveloperBrowser.tsx](src/components/DeveloperBrowser.tsx)
+  and [RepoPicker.tsx](src/components/RepoPicker.tsx). Everything else renders on
+  the server — keep it that way, and keep the remaining components prop-driven.
+  `page.tsx` stays a server component and passes the cohort down, so the seed data
+  never becomes a client fetch.
 - Route handlers validate input and return `{ error: string }` with a 4xx/5xx.
   Errors matching `/^GitHub 4\d\d/` map to 400, everything else to 500.
 - Keep the disclaimer in the UI. Commit counts and language overlap are proxies for
