@@ -1,7 +1,7 @@
 import type { MockDeveloper } from "@/lib/types";
 
 /**
- * Seeded developers for the hackathon demo. Numbers are invented but consistent
+ * Seeded developers for the demo. Numbers are invented but consistent
  * enough to read as real contribution histories. Names are placeholders.
  *
  * Balance: 4 frontend, 3 backend, 3 fullstack.
@@ -24,7 +24,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         languages: ["TypeScript", "TSX", "CSS"],
       },
       {
-        name: "strativ-design-tokens",
+        name: "design-tokens",
         commits: 208,
         additions: 9840,
         deletions: 3120,
@@ -62,7 +62,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         languages: ["TypeScript", "TSX", "Tailwind"],
       },
       {
-        name: "strativ-blog",
+        name: "company-blog",
         commits: 289,
         additions: 15120,
         deletions: 6420,
@@ -178,7 +178,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         languages: ["Python", "SQL"],
       },
       {
-        name: "strativ-billing",
+        name: "billing-service",
         commits: 471,
         additions: 26310,
         deletions: 14210,
@@ -325,7 +325,7 @@ export const DEVELOPERS: MockDeveloper[] = [
     linesDeleted: 34120,
     repos: [
       {
-        name: "strativ-brain",
+        name: "knowledge-brain",
         commits: 512,
         additions: 27220,
         deletions: 13110,

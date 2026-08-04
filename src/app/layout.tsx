@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "DevFit — Find the Best-Fit Developer",
   description:
-    "Rank Strativ developers against a target repo. Decision support for reassignments.",
+    "Rank developers against a target repo. Decision support for reassignments.",
 };
 
 export default function RootLayout({
@@ -40,8 +40,7 @@ export default function RootLayout({
         </header>
         <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
         <footer className="mx-auto max-w-6xl px-6 pb-10 pt-4 text-xs text-ink-400">
-          Strativ hackathon prototype · Decision support for humans, not an
-          automated pass/fail.
+          Prototype · Decision support for humans, not an automated pass/fail.
         </footer>
       </body>
     </html>

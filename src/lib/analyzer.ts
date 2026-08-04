@@ -142,7 +142,7 @@ Rules:
 - Reference concrete signals (languages the dev has that the repo needs, archetype fit, commit depth).
 - For low-fit devs, name the gap (missing language, wrong specialty).
 - Never contradict the numeric verdict.
-- Be specific. No filler ("This developer would be a great addition"). Aim for hackathon-demo caliber sharpness.`;
+- Be specific. No filler ("This developer would be a great addition"). Aim for review-caliber sharpness.`;
 
   const raw = await geminiJSON<Partial<GeminiExplanationResponse>>(prompt);
   const explanations = Array.isArray(raw.explanations) ? raw.explanations : [];
