@@ -7,18 +7,27 @@ digest of the repo, asks Gemini what kind of developer it needs, scores 10 seede
 developers against that requirement with **deterministic** sub-scores, and returns
 a ranked fit list with plain-language explanations.
 
-No database, no auth, no background jobs. All state is seed data + in-memory.
+Sign-in is **email + password** (NextAuth v4 Credentials). **Every page is behind
+the login** — there are no public routes but `/login`. Exactly one `admin` exists,
+bootstrapped from env; everyone else is a `project_manager` created by that admin.
+Users store their **own** Gemini/GitHub credentials, encrypted at rest. MongoDB
+holds users, encrypted keys, the developer cohort and per-user analysis history.
 
 ## Commands
 
 ```bash
 npm install
-cp .env.local.example .env.local   # then paste GEMINI_API_KEY
+cp .env.local.example .env.local   # then fill it in — see Environment below
+npm run seed       # load the developer cohort into MongoDB (required once)
 npm run dev        # http://localhost:3000 (Turbopack)
-npm run build      # prod build; also typechecks and prerenders the 10 dev pages
+npm run build      # prod build; also typechecks
 npm run typecheck  # tsc --noEmit
 npm run lint       # eslint . (flat config)
 ```
+
+`npm run seed` is **not optional** — the cohort lives in MongoDB, and without it
+`/` shows an empty state and `/api/fit` returns 503. It is idempotent (upserts on
+the business `id`), so re-running it updates rather than duplicating.
 
 There is **no test runner configured** — no Jest/Vitest/Playwright, no test files.
 `npm run build` + `npm run typecheck` are the only automated gates. If you add
@@ -58,6 +67,12 @@ orchestrator and the only place that composes all of the above.
 | Path | Role |
 | --- | --- |
 | [src/lib/types.ts](src/lib/types.ts) | All shared types. Start here. |
+| [src/lib/auth.ts](src/lib/auth.ts) | NextAuth options: GitHub provider, JWT callbacks. |
+| [src/lib/session.ts](src/lib/session.ts) | `requireUser` / `requireAdmin` — the authorization boundary. |
+| [src/lib/crypto.ts](src/lib/crypto.ts) | AES-256-GCM seal/open + masking for stored keys. |
+| [src/lib/credentials.ts](src/lib/credentials.ts) | Resolves which key a request uses (user → env). |
+| [src/lib/mongodb.ts](src/lib/mongodb.ts) | Cached client + collection names. |
+| [src/lib/db/](src/lib/db/) | One module per collection: `users`, `keys`, `developers`, `analyses`. |
 | [src/lib/config.ts](src/lib/config.ts) | Weights, thresholds, digest limits, model name. Tunable during a demo. |
 | [src/lib/scoring.ts](src/lib/scoring.ts) | Pure sub-scores + ranking. No I/O, no AI. |
 | [src/lib/github.ts](src/lib/github.ts) | Repo digest builder + URL parsing. |
@@ -65,7 +80,7 @@ orchestrator and the only place that composes all of the above.
 | [src/lib/analyzer.ts](src/lib/analyzer.ts) | Prompts + orchestration. |
 | [src/lib/developerHelpers.ts](src/lib/developerHelpers.ts) | `MockDeveloper` → `DeveloperView` (derives `languages`, `netLines`). |
 | [src/data/developers.ts](src/data/developers.ts) | 10 seeded developers: 4 frontend, 3 backend, 3 fullstack. |
-| [src/app/api/](src/app/api/) | Four route handlers, all `runtime = "nodejs"`. |
+| [src/app/api/](src/app/api/) | Eight route handlers, all `runtime = "nodejs"`. |
 | [src/components/](src/components/) | Mostly presentational; `DeveloperBrowser` and `RepoPicker` are the two client components that hold state. |
 
 Always consume developers through `getAllDevelopers()` / `getDeveloperById()`, never
@@ -100,9 +115,20 @@ that look like bugs but are deliberate, and one that is a genuine wart:
 
 | Var | Required | Notes |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | Yes, for `/api/analyze` + `/api/fit` | Missing key surfaces as a 500 with a copy-paste-able fix message. |
-| `GITHUB_TOKEN` | Optional for analysis, **required** for `/api/repos` | Unauthenticated GitHub is **60 req/hr**. One digest costs 3 REST calls, so ~20 repos/hr. Raw file fetches go to `raw.githubusercontent.com` and don't spend that quota. |
+| `MONGODB_URI` | **Yes** | Atlas `mongodb+srv://…` or local. Nothing works without it. |
+| `MONGODB_DB` | Strongly recommended | If the URI has no `/dbname` path, the driver falls back to `test` — set this explicitly (e.g. `devfit`) or data lands somewhere surprising. |
+| `ENCRYPTION_KEY` | **Yes** | 32 bytes, base64 or hex, for the key vault. Generate: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. **Rotating it makes every stored key undecryptable** — `readUserKey` treats a failed decrypt as "unset", so users silently fall back to env keys and must re-enter theirs. |
+| `NEXTAUTH_SECRET` | **Yes** | Signs the session JWT. Same generator as above. |
+| `NEXTAUTH_URL` | In production | e.g. `https://your-host`. Optional locally. |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | **Yes** for sign-in | Bootstraps the single admin. Created by `npm run seed`, and self-healed on that email's first login attempt if seed wasn't run. **Only ever creates** — it will not overwrite a password the admin later changed, so editing these does not reset an existing account (use the dashboard's *Reset password*). |
+| `ADMIN_NAME` | No | Display name for the bootstrapped admin. |
+| `GEMINI_API_KEY` | No | Fallback when a user hasn't saved their own. |
+| `GITHUB_TOKEN` | No | Same, for GitHub. Unauthenticated GitHub is 60 req/hr; one digest costs 3 REST calls. |
 | `GEMINI_MODEL` | No | Defaults to `gemini-3.6-flash`. |
+
+Never `throw` at module scope for a missing env var. `auth.ts` originally did, which
+broke `npm run build` anywhere without secrets — checks belong at request time
+(`isAuthConfigured()`).
 
 **Model names rot.** `gemini-2.5-flash` (the original default) now returns HTTP 404
 `"no longer available to new users"` on new API keys. Two traps when re-picking one:
@@ -112,15 +138,69 @@ which `geminiText()` throws on. Always probe a candidate with a real
 `generateContent` call using `responseMimeType: application/json` before adopting it.
 `gemini-flash-latest` is the alias to use if you'd rather not revisit this.
 
-`/` and `/developer/[id]` need no keys at all — they render from seed data, so the
-UI is always demoable even with no network.
+## Auth and the key vault
 
-**There is no user auth, and `/api/repos` does not add any.** "The current user" is
-whoever owns `GITHUB_TOKEN`, so the repo picker lists that token's repositories for
-everyone who opens the app. A fine-grained token returns only what it was granted —
-a public-repos-read-only token will not list private repos, which is the token's
-scope, not a bug. If this ever needs to be per-visitor, that's a GitHub OAuth flow,
-not an extension of this route.
+**Every route requires a session.** `/login` is the only unauthenticated page —
+`/` and `/developer/[id]` were public before roles existed and are not any more.
+New pages must guard themselves; see the pattern below.
+
+**Three rules that must not be relaxed.**
+
+1. **Authorization re-reads the database; it never trusts the JWT.** The session
+   token carries a `role` claim, but it is a *UI hint only* — used to decide whether
+   to render the Admin nav link. Every privileged path goes through
+   `requireAdmin()` / `requireUser()` in [src/lib/session.ts](src/lib/session.ts),
+   which loads the user from Mongo. A JWT keeps asserting whatever role it was
+   minted with, so trusting it would let a demoted admin keep admin access until
+   their token expired.
+2. **Stored credentials are never returned to a client.** They are sealed with
+   AES-256-GCM ([src/lib/crypto.ts](src/lib/crypto.ts)) and the API exposes only
+   `maskSecret()` previews (`AQ.Ab8…45`). There is deliberately no endpoint that
+   reads a key back out, and admins cannot see other users' key values — only
+   whether one is set. Do not add a "reveal" affordance. The same applies to
+   passwords: bcrypt hashes (cost 12) that can be replaced but never read.
+3. **Login must not reveal whether an account exists.** `verifyCredentials()`
+   returns `null` for both an unknown email and a wrong password, and runs a dummy
+   bcrypt compare on the unknown-email path so response timing doesn't leak it
+   either. The form shows one message: "Incorrect email or password." Keep it that
+   way — don't add "no such user" for friendliness.
+
+Credential resolution is user-key → env-key → none
+([src/lib/credentials.ts](src/lib/credentials.ts)). The env fallback keeps a
+single-operator deployment working; `credentialSources` on the `/api/fit` response
+reports which one was actually used.
+
+### Roles and account creation
+
+There is **no self-registration**. Accounts come into existence two ways only:
+the env-bootstrapped admin, and `POST /api/admin/users` (admin-only). If you add a
+signup route you have changed the security model — don't do it incidentally.
+
+The API refuses to demote or delete the last admin, and refuses self-demotion and
+self-deletion, so the dashboard cannot be locked out. `ROLE_HOME` in
+[types.ts](src/lib/types.ts) decides where each role lands after login
+(admin → `/admin`, project manager → `/fit`).
+
+Every protected page follows one pattern — copy it rather than inventing another:
+
+```ts
+const user = await getCurrentUser();
+if (!user) redirect("/login");
+if (user.role !== "admin") redirect("/");   // admin pages only
+```
+
+`/api/repos` is genuinely per-user: it uses the signed-in user's own stored token.
+A fine-grained public-repos-only token still won't list private repos — that is the
+token's scope, not a bug.
+
+### Sessions are JWT, not database-backed
+
+Two independent reasons, so don't "upgrade" this:
+
+- The **Credentials provider only supports JWT sessions**. There is no OAuth
+  account record to hang a database session off.
+- `@next-auth/mongodb-adapter@1.1.3` peers on `mongodb: ^4 || ^5`, two majors below
+  the `mongodb@7` driver here, so the adapter can't be installed anyway.
 
 ## Toolchain — read before bumping anything
 
@@ -146,9 +226,34 @@ Both unblock only when the upstream plugins ship support. Re-check with
 
 ## Framework specifics that differ from older Next/Tailwind
 
+- **Never import a plain constant from a `"use client"` module into a server
+  component.** Everything a client module exports becomes a *client reference* on
+  the server, not the underlying value. `SIDEBAR_COOKIE` was originally exported
+  from [AppShell.tsx](src/components/AppShell.tsx) and read in
+  [layout.tsx](src/app/layout.tsx) via `cookies().get(SIDEBAR_COOKIE)` — which
+  never matched, so the sidebar always rendered expanded. It **typechecks and
+  builds clean**; the only symptom is the feature quietly not working. Shared
+  constants belong in a non-client module — this one lives in
+  [types.ts](src/lib/types.ts).
+- **`middleware.ts` does nothing in Next 16 — it was renamed to `proxy.ts`.** A
+  root `middleware.ts` is **silently ignored**: no warning, no error, it simply
+  never runs. This is an easy hour to lose, because page-level `redirect()` calls
+  can make it *look* like route protection is working while the file is dead. If you
+  do add one, it goes at `src/proxy.ts` (same level as `app`) and exports `proxy`.
+  Confirm with `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md`.
+  **This project has no proxy at all, deliberately** — Next 16 recommends avoiding
+  it, and every protected page does its own `getCurrentUser()` + `redirect("/login")`,
+  which keeps authorization next to the thing it protects and works with DB-backed
+  roles that an edge matcher cannot check. Guard new protected pages the same way;
+  don't reintroduce a proxy for auth.
 - **`params` is a Promise.** [src/app/developer/[id]/page.tsx](src/app/developer/%5Bid%5D/page.tsx)
   is an `async` component doing `const { id } = await params`. Any new dynamic
-  route must do the same.
+  route must do the same — including API routes like
+  [api/admin/users/[id]](src/app/api/admin/users/%5Bid%5D/route.ts).
+- **Nothing is statically prerendered any more.** Every route is `ƒ (Dynamic)`.
+  `generateStaticParams` was removed from `/developer/[id]` when the cohort moved to
+  MongoDB, because prerendering would need a DB connection at build time and the
+  cohort is now editable at runtime.
 - **`next lint` no longer exists.** `npm run lint` calls `eslint .` against
   [eslint.config.mjs](eslint.config.mjs) (flat config composing
   `eslint-config-next/core-web-vitals` + `/typescript`).
@@ -199,12 +304,22 @@ Smaller notes:
   not relative paths, except within `src/components/`.
 - Named exports for components and lib functions; default exports only where
   Next requires them (pages, layouts, route handlers).
-- Server-first. Three files are `"use client"`:
-  [fit/page.tsx](src/app/fit/page.tsx), [DeveloperBrowser.tsx](src/components/DeveloperBrowser.tsx)
-  and [RepoPicker.tsx](src/components/RepoPicker.tsx). Everything else renders on
-  the server — keep it that way, and keep the remaining components prop-driven.
-  `page.tsx` stays a server component and passes the cohort down, so the seed data
-  never becomes a client fetch.
+- Server-first. Every `page.tsx` is a **server** component; interactivity lives in
+  `src/components/*` client components: `AppShell`, `FitView`, `DeveloperBrowser`,
+  `RepoPicker`, `KeyManager`, `AdminUserTable`, `LoginForm`, `AuthButtons`. Pages
+  fetch and guard, clients render and mutate — `/fit` follows this too (the form is
+  `FitView`).
+- **Navigation is the collapsible sidebar in [AppShell.tsx](src/components/AppShell.tsx)**,
+  which the root layout wraps around every signed-in page (signed out, `/login`
+  renders bare). Nav items are one `NAV` array — add a route there, with
+  `adminOnly: true` if it's privileged; that only hides the link, so the page must
+  still guard itself. Icons are inline SVG using `currentColor` (no icon package).
+  The collapse preference round-trips through the `SIDEBAR_COOKIE` cookie so the
+  server renders the correct width on first paint instead of flashing open.
+- **No `SessionProvider` is mounted.** The session is read server-side via
+  `getServerSession`; `signIn`/`signOut` don't need a provider (only `useSession`
+  does), so no session-polling JS ships. Don't add `useSession` without weighing
+  that.
 - Route handlers validate input and return `{ error: string }` with a 4xx/5xx.
   Errors matching `/^GitHub 4\d\d/` map to 400, everything else to 500.
 - Keep the disclaimer in the UI. Commit counts and language overlap are proxies for

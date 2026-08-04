@@ -16,6 +16,9 @@ result can be recomputed and audited by hand.
 - [Features](#features)
 - [Stack](#stack)
 - [Setup](#setup)
+- [Authentication & roles](#authentication--roles)
+- [How API keys are stored](#how-api-keys-are-stored)
+- [Data model](#data-model)
 - [Folder structure](#folder-structure)
 - [How it works](#how-it-works)
 - [Routes & API](#routes--api)
@@ -28,6 +31,48 @@ result can be recomputed and audited by hand.
 ---
 
 ## Features
+
+### Accounts (`/login`)
+- **Email + password** sign-in (NextAuth v4 Credentials, bcrypt cost 12).
+- **Every page sits behind the login** — `/login` is the only route reachable while
+  signed out. Each role lands on its own page: admin → `/admin`, project manager →
+  `/fit`.
+- Two roles: exactly one **Admin** (bootstrapped from `ADMIN_EMAIL` /
+  `ADMIN_PASSWORD`) and any number of **Project managers**, created by that admin.
+- **No self-registration.** Accounts exist only via the env-bootstrapped admin or
+  the admin dashboard.
+
+### Navigation
+- **Collapsible sidebar** instead of a top nav — icon + label when expanded,
+  icon-only when collapsed, with the toggle at the top of the sidebar.
+- The collapse preference is stored in a cookie and read **server-side**, so the
+  sidebar paints at the right width on first load rather than flashing open.
+- Nav adapts to role: project managers see Developers / Check fit / History /
+  Settings; admins additionally see Admin.
+- On mobile it becomes an off-canvas drawer with a scrim, closes on navigation, and
+  dismisses with `Escape`. Active route is marked with `aria-current="page"`.
+
+### Your API keys (`/settings`)
+- Save, update and delete your **own** `GEMINI_API_KEY` and `GITHUB_TOKEN`.
+- Stored **encrypted (AES-256-GCM)**; the app shows only a masked preview
+  (`github…OP`) and never returns a stored value to the browser.
+- Your usage counts against your own quota, not a shared key.
+
+### Admin dashboard (`/admin`)
+- **Create project-manager accounts** — email, optional name, and a password (with a
+  generator). The password is shown once, to be passed on securely; there is no
+  reset-by-email flow.
+- **Reset any user's password**, promote/demote, and delete users. Deleting a user
+  also removes their stored keys and history.
+- Every user with role, join date, last login, and **whether** they have saved each
+  credential — never the values, not even for admins.
+- The last admin cannot be demoted or deleted, and self-demotion and self-deletion
+  are refused, so the dashboard can't be locked out.
+- Filter by email or name, plus roster totals.
+
+### Analysis history (`/history`)
+- Every fit run you've done, newest first, with the derived requirement and top
+  pick. Scoped to your own account.
 
 ### Developers list (`/`)
 - Grid of the seeded developer cohort with archetype, commit volume, net lines
@@ -44,10 +89,10 @@ result can be recomputed and audited by hand.
 
 ### Fit analysis (`/fit`)
 - Paste any public GitHub repo URL, with inline validation before submitting.
-- **Browse your own repositories** — lists every repo the configured
-  `GITHUB_TOKEN` can see (newest push first), with its own filter box, language,
-  star count, push date and `private` / `fork` badges. Selecting one fills the
-  form so you can review before running.
+- **Browse your own repositories** — lists every repo *your own saved* GitHub token
+  can see (newest push first), with its own filter box, language, star count, push
+  date and `private` / `fork` badges. Selecting one fills the form so you can review
+  before running.
 - **Full-screen loader** while the request runs, with a staged message
   (*Analysing repository…* → *Ranking developers…*), a spinner, a halo and an
   indeterminate progress bar. It respects `prefers-reduced-motion` and announces
@@ -58,7 +103,7 @@ result can be recomputed and audited by hand.
 
 ### Developer detail (`/developer/[id]`)
 - Contribution totals, per-repository commit/addition/deletion breakdown and
-  recent commit messages. Statically prerendered for every seeded developer.
+  recent commit messages, read from MongoDB.
 
 ---
 
@@ -71,7 +116,9 @@ result can be recomputed and audited by hand.
 | Language | TypeScript (strict) |
 | AI | Google Gemini via REST (`gemini-3.6-flash` by default) |
 | Repo data | GitHub REST API + `raw.githubusercontent.com` |
-| Persistence | None — seed data + in-memory only |
+| Auth | NextAuth v4 — email + password (Credentials), JWT sessions, bcrypt |
+| Database | MongoDB (official `mongodb` driver v7) |
+| Secrets at rest | AES-256-GCM via Node `crypto` |
 
 Requires **Node.js ≥ 20.9**.
 
@@ -87,43 +134,140 @@ lives in an `@theme` block in `src/app/globals.css`.
 
 ## Setup
 
-```bash
-# 1. Install deps
-npm install
+### 1. Install
 
-# 2. Copy env template and fill in keys
+```bash
+npm install
 cp .env.local.example .env.local
 ```
 
-Then edit `.env.local`:
+### 2. MongoDB
+
+Either a free **Atlas M0** cluster or a local server — only the URI differs.
 
 ```ini
-# Required for /api/analyze and /api/fit — https://aistudio.google.com/app/apikey
+# Include a database name, or set MONGODB_DB — otherwise the driver
+# silently falls back to a database called "test".
+MONGODB_URI=mongodb+srv://user:pass@cluster.xxxxx.mongodb.net/
+MONGODB_DB=devfit
+```
+
+### 3. Generate two secrets
+
+```bash
+node -e "console.log('ENCRYPTION_KEY=' + require('crypto').randomBytes(32).toString('base64'))"
+node -e "console.log('NEXTAUTH_SECRET=' + require('crypto').randomBytes(32).toString('base64'))"
+```
+
+`ENCRYPTION_KEY` must be **32 bytes** (base64 or hex). Changing it later makes every
+already-stored user key undecryptable — users would have to re-enter theirs.
+
+### 4. Complete `.env.local`
+
+```ini
+MONGODB_URI=mongodb+srv://…
+MONGODB_DB=devfit
+
+ENCRYPTION_KEY=…            # 32 bytes, base64 — from step 3
+NEXTAUTH_SECRET=…           # from step 3
+NEXTAUTH_URL=http://localhost:3000
+
+# The single admin account, created by `npm run seed`.
+ADMIN_EMAIL=you@company.com
+ADMIN_PASSWORD=choose-something-strong
+ADMIN_NAME=Your Name
+
+# Optional server-wide fallbacks, used when a user hasn't saved their own.
 GEMINI_API_KEY=
-
-# Optional for analysis, REQUIRED for the "browse your repositories" picker.
-# Also raises the GitHub rate limit from 60 to 5,000 req/hr.
 GITHUB_TOKEN=
-
-# Optional. Defaults to gemini-3.6-flash.
 GEMINI_MODEL=gemini-3.6-flash
 ```
 
+### 5. Seed and run
+
 ```bash
-# 3. Run
-npm run dev
-# → http://localhost:3000
+npm run seed     # developer cohort + the admin account — required
+npm run dev      # → http://localhost:3000
 ```
+
+Sign in at `/login` with `ADMIN_EMAIL` / `ADMIN_PASSWORD`, add your Gemini key at
+`/settings`, then create project managers from `/admin`.
+
+> `ADMIN_PASSWORD` only applies when the account is **created**. Re-running the seed
+> never overwrites a password that has since been changed — use *Reset password* in
+> the dashboard for that.
 
 | Script | Purpose |
 | --- | --- |
 | `npm run dev` | Dev server (Turbopack) |
-| `npm run build` | Production build; typechecks and prerenders developer pages |
+| `npm run build` | Production build; also typechecks |
 | `npm start` | Serve the production build |
+| `npm run seed` | Developer cohort + admin account in MongoDB (idempotent) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | `eslint .` (flat config) |
 
 There is no test runner configured — `build` and `typecheck` are the automated gates.
+
+---
+
+## Authentication & roles
+
+| | Admin | Project manager |
+| --- | --- | --- |
+| How the account is made | `ADMIN_EMAIL` / `ADMIN_PASSWORD` + `npm run seed` | Created by the admin in `/admin` |
+| Lands on after login | `/admin` | `/fit` |
+| Manage users | ✅ | ❌ (403) |
+| Own keys, fit runs, history | ✅ | ✅ |
+
+Passwords are **bcrypt** hashes at cost 12 — replaceable, never readable. Sessions
+are **JWT**: the Credentials provider supports no other strategy, and
+`@next-auth/mongodb-adapter` peers on `mongodb ^4 || ^5` anyway, two majors behind
+the v7 driver here.
+
+**The role in the JWT is a UI hint only.** Every privileged route and page re-reads
+the user from MongoDB via `requireUser()` / `requireAdmin()`, so a demotion takes
+effect immediately instead of waiting for the token to expire.
+
+**Login does not reveal whether an account exists.** An unknown email and a wrong
+password produce the same message and comparable response timing, so the form can't
+be used to enumerate users.
+
+There is **no `proxy.ts`** (Next 16's rename of `middleware.ts`). Each page does its
+own `getCurrentUser()` + `redirect("/login")`, which keeps the check beside what it
+protects and works with DB-backed roles an edge matcher can't read.
+
+---
+
+## How API keys are stored
+
+```
+plaintext ──> AES-256-GCM ──> { ciphertext, iv, tag } ──> MongoDB
+                  │
+                  └─> maskSecret() ──> "github…OP"   (the only thing a client sees)
+```
+
+- A random 96-bit IV per write, so the same key encrypts differently every time.
+- GCM is **authenticated**: a tampered document fails to decrypt rather than
+  yielding garbage.
+- **No endpoint returns a stored key.** Not to the owner, not to an admin.
+- A failed decrypt (rotated `ENCRYPTION_KEY`, tampered document) is treated as
+  "unset" rather than throwing, so the request falls back to a server key.
+- Deleting a key removes it immediately.
+
+---
+
+## Data model
+
+| Collection | Holds |
+| --- | --- |
+| `users` | `email` (unique, lowercased), `passwordHash` (bcrypt), `name`, `role`, `createdAt`, `lastLoginAt` |
+| `userKeys` | `userId`, `kind` (`gemini`/`github`), `sealed {ciphertext, iv, tag}`, `preview`, `updatedAt` |
+| `developers` | The cohort — unique index on the business `id` |
+| `analyses` | `userId`, `repoUrl`, `owner`, `repo`, `requirement`, `ranked[]`, `topPickId`, `createdAt` |
+
+The Mongo client is cached on `globalThis` — dev-mode HMR re-evaluates modules, and
+without caching each reload would open another connection pool until the server
+refused them.
 
 ---
 
@@ -132,22 +276,34 @@ There is no test runner configured — `build` and `typecheck` are the automated
 ```
 .
 ├── src/
-│   ├── app/
-│   │   ├── layout.tsx              # Shell: header, nav, footer, metadata
-│   │   ├── page.tsx                # "/" — server component, passes cohort down
+│   ├── app/                        # Every page guards itself; all dynamic
+│   │   ├── layout.tsx              # Shell: header, role-aware nav, footer
+│   │   ├── page.tsx                # "/" — developers list
 │   │   ├── globals.css             # Tailwind entry + @theme brand palette
-│   │   ├── developer/
-│   │   │   └── [id]/page.tsx       # Per-developer detail (async params, SSG)
-│   │   ├── fit/
-│   │   │   └── page.tsx            # "/fit" — the only page-level client component
+│   │   ├── login/page.tsx          # The only unauthenticated route
+│   │   ├── settings/page.tsx       # Your own API keys
+│   │   ├── admin/page.tsx          # Admin-only: user management
+│   │   ├── history/page.tsx        # Your past fit runs
+│   │   ├── developer/[id]/page.tsx # Per-developer detail (async params)
+│   │   ├── fit/page.tsx            # Server guard, renders <FitView>
 │   │   └── api/
+│   │       ├── auth/[...nextauth]/ # NextAuth credentials handler
 │   │       ├── analyze/route.ts    # POST → repo requirement only
-│   │       ├── developers/route.ts # GET  → seed cohort
-│   │       ├── fit/route.ts        # POST → requirement + ranking + rationale
-│   │       └── repos/route.ts      # GET  → repos visible to GITHUB_TOKEN
+│   │       ├── developers/route.ts # GET  → cohort
+│   │       ├── fit/route.ts        # POST → ranking (+ saves history)
+│   │       ├── repos/route.ts      # GET  → your GitHub repos
+│   │       ├── keys/route.ts       # GET/PUT/DELETE your credentials
+│   │       ├── analyses/route.ts   # GET  → your history
+│   │       └── admin/users/        # GET/POST, and [id] PATCH/DELETE
 │   │
 │   ├── components/
-│   │   ├── DeveloperBrowser.tsx    # [client] name + stack filtering for "/"
+│   │   ├── AppShell.tsx            # [client] collapsible sidebar + shell
+│   │   ├── LoginForm.tsx           # [client] email + password
+│   │   ├── KeyManager.tsx          # [client] save/update/delete keys
+│   │   ├── AdminUserTable.tsx      # [client] create/reset/promote/delete
+│   │   ├── AuthButtons.tsx         # [client] sign out
+│   │   ├── FitView.tsx             # [client] the whole fit flow
+│   │   ├── DeveloperBrowser.tsx    # [client] name + stack filtering
 │   │   ├── RepoPicker.tsx          # [client] lists your GitHub repos
 │   │   ├── FullScreenLoader.tsx    # Centered blocking loader
 │   │   ├── DeveloperCard.tsx       # Grid card
@@ -157,22 +313,32 @@ There is no test runner configured — `build` and `typecheck` are the automated
 │   │
 │   ├── lib/
 │   │   ├── types.ts                # All shared types — start here
+│   │   ├── auth.ts                 # NextAuth options (Credentials provider)
+│   │   ├── session.ts              # requireUser / requireAdmin — authz boundary
+│   │   ├── crypto.ts               # AES-256-GCM seal/open + masking
+│   │   ├── credentials.ts          # Which key a request uses (user → env)
+│   │   ├── mongodb.ts              # Cached client + collection names
+│   │   ├── db/                     # users, keys, developers, analyses
 │   │   ├── config.ts               # Weights, thresholds, digest limits, model
 │   │   ├── scoring.ts              # Pure sub-scores + ranking (no I/O, no AI)
 │   │   ├── github.ts               # Repo digest, URL parsing, repo listing
 │   │   ├── gemini.ts               # Gemini REST client, JSON mode + retry
 │   │   ├── analyzer.ts             # Prompts + end-to-end orchestration
-│   │   └── developerHelpers.ts     # MockDeveloper → DeveloperView
+│   │   └── developerHelpers.ts     # MockDeveloper → DeveloperView (pure)
 │   │
+│   ├── types/next-auth.d.ts        # Session/JWT augmentation (id, role)
 │   └── data/
-│       └── developers.ts           # 10 seeded developers (4 FE, 3 BE, 3 FS)
+│       └── developers.ts           # Seed input for `npm run seed`
 │
+├── scripts/seed.mjs                # Cohort + admin bootstrap
 ├── CLAUDE.md                       # Guide for AI coding agents
 ├── AGENTS.md                       # Managed block written by `next dev`
 ├── eslint.config.mjs               # Flat config (Next 16 removed `next lint`)
 ├── postcss.config.mjs              # @tailwindcss/postcss
 └── .env.local.example              # Env template
 ```
+
+There is no `middleware.ts`/`proxy.ts` — see [Authentication & roles](#authentication--roles).
 
 ---
 
@@ -206,22 +372,35 @@ capped at 15 KB so the prompt stays inside the model's context.
 ## Routes & API
 
 ### Pages
-| Route | Description | Needs keys? |
+| Route | Description | Access |
 | --- | --- | --- |
-| `/` | Developers list with name + stack filters | No |
-| `/developer/[id]` | Per-developer detail (prerendered) | No |
-| `/fit` | Repo URL → requirement + ranked fit list | Yes (Gemini) |
+| `/login` | Email + password | Public (the only one) |
+| `/` | Developers list with name + stack filters | Signed in |
+| `/developer/[id]` | Per-developer detail | Signed in |
+| `/fit` | Repo URL → requirement + ranked fit list | Signed in (+ Gemini key) |
+| `/history` | Your past fit runs | Signed in |
+| `/settings` | Your own API keys | Signed in |
+| `/admin` | User management | **Admin only** |
 
 ### Endpoints
-| Endpoint | Returns |
-| --- | --- |
-| `POST /api/analyze { repoUrl }` | `{ requirement, digestMeta }` |
-| `POST /api/fit { repoUrl }` | `{ requirement, ranked, topPickId, topPickRationale }` |
-| `GET /api/developers` | `{ developers }` — the seed cohort |
-| `GET /api/repos` | `{ login, repos }` — repos visible to `GITHUB_TOKEN` |
+| Endpoint | Returns | Access |
+| --- | --- | --- |
+| `POST /api/analyze { repoUrl }` | `{ requirement, digestMeta }` | Signed in |
+| `POST /api/fit { repoUrl }` | `{ requirement, ranked, topPickId, topPickRationale, analysisId, credentialSources }` | Signed in |
+| `GET /api/developers` | `{ developers }` | Signed in |
+| `GET /api/repos` | `{ login, repos, tokenSource }` | Signed in |
+| `GET /api/keys` | `{ keys }` — masked previews only | Signed in |
+| `PUT /api/keys { kind, value }` | `{ key }` — stores encrypted | Signed in |
+| `DELETE /api/keys?kind=` | `{ removed, keys }` | Signed in |
+| `GET /api/analyses` | `{ analyses }` — yours only | Signed in |
+| `GET /api/admin/users` | `{ users }` + key **presence** | **Admin** |
+| `POST /api/admin/users` | `{ user }` — create an account | **Admin** |
+| `PATCH /api/admin/users/[id]` | `{ role }` or `{ password }` | **Admin** |
+| `DELETE /api/admin/users/[id]` | Deletes user + keys + history | **Admin** |
 
-Bad JSON and a missing `repoUrl` return `400`. Upstream GitHub `4xx` is surfaced
-as `400`; anything else is `500`. Every error response is `{ error: string }`.
+Unauthenticated requests get `401`, non-admins hitting admin routes get `403`. Bad
+JSON and a missing `repoUrl` return `400`; upstream GitHub `4xx` is surfaced as
+`400`. Every error response is `{ error: string }`.
 
 ---
 
@@ -274,14 +453,19 @@ can be tuned without touching the engine.
   honest fix — see [Future scope](#future-scope).
 - **`experienceDepth` is cohort-relative.** Adding or removing a seeded developer
   shifts everyone else's score.
-- **No auth.** `/api/repos` lists whatever `GITHUB_TOKEN` can see, so "your
-  repositories" means "the token owner's repositories" for every visitor. A
-  fine-grained public-repos-only token will not list private repos.
+- **No password recovery.** There is no reset-by-email flow — an admin resets a
+  password from `/admin`. If the sole admin loses theirs, delete that user row in
+  MongoDB and re-run `npm run seed` to recreate it from env.
+- **`ENCRYPTION_KEY` is not rotatable in place.** Changing it makes every stored
+  user key undecryptable; the app treats a failed decrypt as "unset", so users
+  silently fall back to server keys and must re-enter theirs.
+- **A public-repos-only GitHub token won't list private repos** in the picker. That
+  is the token's scope, not a bug.
 - **Model names rot.** The original default `gemini-2.5-flash` now 404s for new
   API keys. Note that `GET /v1beta/models` still *lists* retired models, so always
   probe a candidate with a real `generateContent` call before adopting it.
-- **Seed edits need a rebuild.** `/developer/[id]` is prerendered via
-  `generateStaticParams()`.
+- **Nothing is statically prerendered.** Every route is dynamic, because the cohort
+  and the session are both read per request.
 - **GitHub rate limits.** Unauthenticated is 60 req/hr and one digest spends 3 of
   those (repo meta, tree, languages). File reads hit
   `raw.githubusercontent.com`, which doesn't draw on that quota. `GITHUB_TOKEN`
@@ -309,8 +493,10 @@ can be tuned without touching the engine.
   over time.
 
 **Product**
-- GitHub OAuth so each visitor sees their *own* repositories instead of the
-  token owner's.
+- Optional "Sign in with GitHub" alongside email+password, so the repo picker
+  works without anyone pasting a personal access token.
+- Self-service password change for project managers (today only an admin can reset
+  one), and an email-based reset flow.
 - Analyse a private repo the signed-in user has access to.
 - Multi-repo / team-level fit: staff a whole project, not one slot, with
   capacity awareness.
