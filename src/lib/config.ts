@@ -27,4 +27,10 @@ export const DIGEST_LIMITS = {
   maxFileBytes: 15 * 1024, // 15 KB
 } as const;
 
-export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+/**
+ * `gemini-2.5-flash` was retired for new API keys ("no longer available to new
+ * users", HTTP 404), so the default is a current flash model. Use
+ * `gemini-flash-latest` via GEMINI_MODEL if you'd rather never touch this again
+ * and can tolerate the narration drifting between releases.
+ */
+export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
