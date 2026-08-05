@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { KeyKind, KeyStatus } from "@/lib/types";
 
 const META: Record<
@@ -24,6 +25,7 @@ const META: Record<
 };
 
 export function KeyManager({ initial }: { initial: KeyStatus[] }) {
+  const router = useRouter();
   const [statuses, setStatuses] = useState<KeyStatus[]>(initial);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<KeyKind | null>(null);
@@ -52,6 +54,9 @@ export function KeyManager({ initial }: { initial: KeyStatus[] }) {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Could not save key");
       replace(json.key as KeyStatus);
+      // Whether a key exists drives the /fit warning banner and the admin roster,
+      // so invalidate the client cache rather than let those go stale.
+      router.refresh();
       setDrafts((prev) => ({ ...prev, [kind]: "" }));
       setNotice(`${META[kind].label} saved.`);
     } catch (err) {
@@ -70,6 +75,7 @@ export function KeyManager({ initial }: { initial: KeyStatus[] }) {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Could not delete key");
       setStatuses(json.keys as KeyStatus[]);
+      router.refresh();
       setNotice(`${META[kind].label} removed.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete key");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ROLE_LABELS, type AppUser, type Role } from "@/lib/types";
 
 export interface AdminUserRow extends AppUser {
@@ -22,6 +23,7 @@ export function AdminUserTable({
   initial: AdminUserRow[];
   currentUserId: string;
 }) {
+  const router = useRouter();
   const [rows, setRows] = useState(initial);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +62,9 @@ export function AdminUserTable({
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Could not create account");
       setRows((prev) => [...prev, json.user as AdminUserRow]);
+      // Invalidate the client Router Cache; without it, navigating away and back
+      // within the stale window would show the roster from before this change.
+      router.refresh();
       setNotice(
         `Created ${json.user.email}. Share the password with them — it cannot be shown again.`
       );
@@ -87,6 +92,7 @@ export function AdminUserTable({
       setRows((prev) =>
         prev.map((r) => (r.id === id ? { ...r, role: json.user.role } : r))
       );
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update role");
     } finally {
@@ -135,6 +141,7 @@ export function AdminUserTable({
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Could not delete user");
       setRows((prev) => prev.filter((r) => r.id !== id));
+      router.refresh();
       setNotice(`Deleted ${email}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete user");
