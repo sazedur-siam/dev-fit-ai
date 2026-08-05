@@ -1,9 +1,14 @@
 import { MongoClient, type Db } from "mongodb";
 
 /**
- * Cached connection. Next's dev server re-evaluates modules on every HMR pass,
- * so creating a client per import opens connections until the server refuses
- * them. Stashing the promise on globalThis survives module reloads.
+ * One connection promise per process, cached on globalThis.
+ *
+ * This matters in *both* environments, for different reasons. In development,
+ * Next re-evaluates modules on every HMR pass, so a per-import client would open
+ * connections until the server refused them. In production — especially
+ * serverless — a warm instance handles many requests, and the connection must be
+ * reused across them: establishing one costs an SRV lookup, a TLS handshake and a
+ * SCRAM exchange, which is hundreds of milliseconds against a remote cluster.
  */
 const globalForMongo = globalThis as unknown as {
   _devfitMongo?: Promise<MongoClient>;
@@ -28,9 +33,21 @@ function connect(): Promise<MongoClient> {
 }
 
 export function getMongoClient(): Promise<MongoClient> {
-  // Cache in development only; in production the module is evaluated once.
-  if (process.env.NODE_ENV === "production") return connect();
-  globalForMongo._devfitMongo ??= connect();
+  // Cache unconditionally. This previously short-circuited in production on the
+  // assumption that the module is evaluated once — but the cost is per *call*, not
+  // per module load, so every getDb() built a whole new client and reconnected
+  // from scratch. A page touching three collections paid for three handshakes, and
+  // nothing ever closed them, so the cluster's connection limit was the ceiling.
+  if (!globalForMongo._devfitMongo) {
+    globalForMongo._devfitMongo = connect().catch((err) => {
+      // Never cache a rejection. A failed first connection — a blocked IP, a
+      // paused cluster — would otherwise be remembered for the life of the
+      // process, so the instance could not recover once the cause was fixed
+      // without being recycled. Clearing it lets the next request retry.
+      globalForMongo._devfitMongo = undefined;
+      throw err;
+    });
+  }
   return globalForMongo._devfitMongo;
 }
 

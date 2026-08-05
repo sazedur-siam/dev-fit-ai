@@ -37,9 +37,24 @@ export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
+/**
+ * Index creation is memoised per process. It used to run on every call, adding a
+ * round trip to every user lookup — and `getCurrentUser()` runs on every page, so
+ * each navigation paid for it. `createIndex` is idempotent but not free.
+ */
+let emailIndexReady: Promise<unknown> | null = null;
+
 async function users() {
   const col = (await getDb()).collection<UserDoc>(COLLECTIONS.users);
-  await col.createIndex({ email: 1 }, { unique: true });
+  if (!emailIndexReady) {
+    emailIndexReady = col.createIndex({ email: 1 }, { unique: true }).catch((err) => {
+      // Don't cache a failure — a transient error would otherwise leave the
+      // collection permanently unindexed for this process.
+      emailIndexReady = null;
+      throw err;
+    });
+  }
+  await emailIndexReady;
   return col;
 }
 
