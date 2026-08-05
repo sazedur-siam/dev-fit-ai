@@ -16,7 +16,15 @@ function connect(): Promise<MongoClient> {
       "MONGODB_URI is not set. Add it to .env.local — see .env.local.example."
     );
   }
-  return new MongoClient(uri).connect();
+  return new MongoClient(uri, {
+    // The driver defaults to waiting 30s to select a server. On a blocked
+    // connection — an IP missing from the Atlas access list, say — that turns
+    // "sign in" into a 30s hang and can outlast a serverless function's own
+    // timeout, so the request appears to hang forever with no error at all.
+    // Failing in a few seconds with a real message is far more useful.
+    serverSelectionTimeoutMS: 8000,
+    connectTimeoutMS: 8000,
+  }).connect();
 }
 
 export function getMongoClient(): Promise<MongoClient> {

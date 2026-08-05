@@ -69,9 +69,20 @@ export async function GET() {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       database = { reachable: false, error: message.slice(0, 200) };
+
+      // Atlas rejects a non-allowlisted IP by aborting the TLS handshake rather
+      // than refusing the connection, so the driver surfaces "tlsv1 alert internal
+      // error / SSL alert number 80". That reads like a certificate fault and sends
+      // people to the wrong problem entirely — name the real cause.
+      const looksLikeBlockedIp =
+        /alert number 80|tlsv1 alert internal error|ssl3_read_bytes/i.test(message);
+      const looksLikeTimeout = /timed out|ETIMEDOUT|ENOTFOUND|ServerSelection/i.test(
+        message
+      );
+
       problems.push(
-        /timed out|ETIMEDOUT|ENOTFOUND/i.test(message)
-          ? "Database unreachable — allow 0.0.0.0/0 in MongoDB Atlas Network Access"
+        looksLikeBlockedIp || looksLikeTimeout
+          ? "Database unreachable — this is almost always the MongoDB Atlas access list. Add 0.0.0.0/0 under Network Access, since serverless platforms have no fixed egress IP. (Atlas reports a blocked IP as a TLS alert, not a connection refusal.)"
           : "Database unreachable"
       );
     }
