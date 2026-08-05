@@ -73,21 +73,24 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
     }
   }
 
+  const fieldClass =
+    "mt-1.5 w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-sm text-heading placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-line";
+  const labelClass =
+    "text-[10px] font-bold uppercase tracking-[0.14em] text-muted";
+
   return (
-    <form onSubmit={submit} className="mt-6 text-left">
+    <form onSubmit={submit} className="mt-7 text-left">
       {error && (
         <div
           role="alert"
-          className="mb-4 rounded-lg border border-brick-500/30 bg-brick-50 p-3 text-sm text-brick-600"
+          className="mb-4 rounded-xl border border-danger-line bg-danger-bg p-3.5 text-sm font-medium text-danger-fg"
         >
           {error}
         </div>
       )}
 
       <label className="block">
-        <span className="text-xs font-medium uppercase tracking-wide text-ink-400">
-          Email
-        </span>
+        <span className={labelClass}>Email</span>
         <input
           type="email"
           required
@@ -96,14 +99,12 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@company.com"
-          className="mt-1 w-full rounded-md border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900 placeholder:text-ink-400 focus:border-pine-500 focus:outline-none focus:ring-2 focus:ring-pine-500/20"
+          className={fieldClass}
         />
       </label>
 
       <label className="mt-4 block">
-        <span className="text-xs font-medium uppercase tracking-wide text-ink-400">
-          Password
-        </span>
+        <span className={labelClass}>Password</span>
         <input
           type="password"
           required
@@ -111,14 +112,14 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="••••••••"
-          className="mt-1 w-full rounded-md border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900 placeholder:text-ink-400 focus:border-pine-500 focus:outline-none focus:ring-2 focus:ring-pine-500/20"
+          className={fieldClass}
         />
       </label>
 
       <button
         type="submit"
         disabled={busy}
-        className="mt-6 w-full rounded-md bg-pine-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-pine-700 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-7 w-full rounded-lg bg-accent px-4 py-3 text-sm font-bold text-accent-contrast shadow-brand transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
       >
         {busy ? "Signing in…" : "Sign in"}
       </button>

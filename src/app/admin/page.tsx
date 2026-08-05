@@ -27,16 +27,16 @@ export default async function AdminPage() {
 
   return (
     <div>
-      <section className="rounded-2xl border border-ink-200 bg-white p-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink-900">
+      <section className="rounded-2xl border border-line bg-surface p-6 shadow-card sm:p-7">
+        <h1 className="text-2xl font-extrabold tracking-tight text-heading sm:text-3xl">
           Admin dashboard
         </h1>
-        <p className="mt-1 max-w-2xl text-sm text-ink-600">
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-body">
           Manage who can use DevFit and what role they hold. Credential values are
           encrypted and never shown here — only whether each user has saved one.
         </p>
 
-        <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Stat label="Users" value={rows.length} />
           <Stat
             label="Admins"
@@ -45,6 +45,7 @@ export default async function AdminPage() {
           <Stat
             label="With keys"
             value={rows.filter((r) => r.hasGeminiKey || r.hasGithubKey).length}
+            accent
           />
           <Stat label="Developers" value={developerCount} />
         </div>
@@ -57,11 +58,35 @@ export default async function AdminPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number;
+  accent?: boolean;
+}) {
   return (
-    <div className="rounded-xl border border-ink-200 bg-ink-50 p-4">
-      <div className="text-xs uppercase tracking-wide text-ink-400">{label}</div>
-      <div className="mt-1 text-2xl font-semibold text-ink-900">{value}</div>
+    <div
+      className={`rounded-xl border p-4 ${
+        accent ? "border-accent-line bg-accent-soft" : "border-line bg-surface-2"
+      }`}
+    >
+      <div
+        className={`text-[10px] font-bold uppercase tracking-[0.14em] ${
+          accent ? "text-accent-soft-fg" : "text-muted"
+        }`}
+      >
+        {label}
+      </div>
+      <div
+        className={`mt-1 text-2xl font-extrabold tabular-nums ${
+          accent ? "text-accent-soft-fg" : "text-heading"
+        }`}
+      >
+        {value}
+      </div>
     </div>
   );
 }

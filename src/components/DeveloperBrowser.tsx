@@ -62,32 +62,46 @@ export function DeveloperBrowser({
 
   return (
     <div>
-      <section className="mt-8 rounded-2xl border border-ink-200 bg-white p-5">
-        <div className="flex flex-col gap-4">
+      <section className="mt-6 rounded-2xl border border-line bg-surface p-5 shadow-card">
+        <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1">
+              <span
+                aria-hidden
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  className="h-4 w-4"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="M20 20l-3.5-3.5" />
+                </svg>
+              </span>
               <input
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Filter by name…"
                 aria-label="Filter developers by name"
-                className="w-full rounded-md border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900 placeholder:text-ink-400 focus:border-pine-500 focus:outline-none focus:ring-2 focus:ring-pine-500/20"
+                className="w-full rounded-lg border border-line bg-surface py-2.5 pl-9 pr-3 text-sm text-heading placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-line"
               />
             </div>
-            <div className="flex items-center gap-3 text-xs text-ink-400">
+            <div className="flex items-center gap-3 text-xs text-muted">
               <span aria-live="polite">
                 Showing{" "}
-                <span className="font-semibold text-ink-800">
-                  {filtered.length}
-                </span>{" "}
+                <span className="font-bold text-heading">{filtered.length}</span>{" "}
                 of {developers.length}
               </span>
               {isFiltering && (
                 <button
                   type="button"
                   onClick={clearAll}
-                  className="rounded-md border border-ink-200 px-2 py-1 font-medium text-ink-600 hover:border-pine-500/40 hover:text-pine-700"
+                  className="rounded-lg border border-line px-2.5 py-1.5 font-semibold text-body transition hover:border-accent hover:text-accent-soft-fg"
                 >
                   Clear
                 </button>
@@ -96,13 +110,13 @@ export function DeveloperBrowser({
           </div>
 
           <div>
-            <div className="text-xs uppercase tracking-wide text-ink-400">
+            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted">
               Stack{" "}
-              <span className="normal-case tracking-normal">
+              <span className="font-medium normal-case tracking-normal">
                 (matches all selected)
               </span>
             </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
               {allStacks.map((stack) => {
                 const active = stacks.includes(stack);
                 return (
@@ -111,10 +125,10 @@ export function DeveloperBrowser({
                     type="button"
                     onClick={() => toggleStack(stack)}
                     aria-pressed={active}
-                    className={`rounded-md px-2 py-1 text-[11px] font-medium transition ${
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
                       active
-                        ? "bg-pine-600 text-white"
-                        : "bg-ink-100 text-ink-600 hover:bg-ink-200"
+                        ? "bg-accent text-accent-contrast shadow-brand"
+                        : "bg-surface-2 text-body ring-1 ring-inset ring-line hover:bg-surface-3 hover:text-heading"
                     }`}
                   >
                     {stack}
@@ -127,11 +141,11 @@ export function DeveloperBrowser({
       </section>
 
       {filtered.length === 0 ? (
-        <div className="mt-8 rounded-xl border border-dashed border-ink-200 bg-white p-10 text-center">
-          <p className="text-sm font-medium text-ink-800">
+        <div className="mt-6 rounded-2xl border border-dashed border-line-strong bg-surface p-12 text-center">
+          <p className="text-sm font-bold text-heading">
             No developer matches these filters
           </p>
-          <p className="mt-1 text-xs text-ink-400">
+          <p className="mt-1.5 text-xs text-muted">
             {stacks.length > 1
               ? "Stacks are combined with AND — try removing one."
               : "Try a different name or stack."}
@@ -139,13 +153,13 @@ export function DeveloperBrowser({
           <button
             type="button"
             onClick={clearAll}
-            className="mt-4 rounded-md bg-pine-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pine-700"
+            className="mt-5 rounded-lg bg-accent px-4 py-2 text-xs font-bold text-accent-contrast transition hover:bg-accent-hover"
           >
             Clear filters
           </button>
         </div>
       ) : (
-        <section className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((dev) => (
             <DeveloperCard key={dev.id} dev={dev} />
           ))}
@@ -154,7 +168,7 @@ export function DeveloperBrowser({
 
       {/* Archetype counts, so a filtered view still shows the cohort shape. */}
       {filtered.length > 0 && (
-        <p className="mt-4 text-xs text-ink-400">
+        <p className="mt-5 text-xs text-muted">
           {(["frontend", "backend", "fullstack"] as Archetype[])
             .map(
               (a) =>

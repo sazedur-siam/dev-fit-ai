@@ -25,6 +25,26 @@ export const ROLE_HOME: Record<Role, string> = {
  */
 export const SIDEBAR_COOKIE = "devfit_sidebar";
 
+/**
+ * Theme preference, stored the same way and for the same reason: the server
+ * stamps the resolved class onto `<html>` so the first paint is already the
+ * right theme instead of flashing light then swapping.
+ *
+ * `"system"` is represented by the *absence* of a class on `<html>`, which
+ * `globals.css` picks up with a `prefers-color-scheme` block. That is why no
+ * blocking inline script is needed to avoid a flash.
+ */
+export const THEME_COOKIE = "devfit_theme";
+
+export type ThemePreference = "light" | "dark" | "system";
+
+export const THEME_PREFERENCES: ThemePreference[] = ["light", "dark", "system"];
+
+/** Narrows an untrusted cookie value; anything unrecognised means "system". */
+export function parseThemePreference(value: string | undefined): ThemePreference {
+  return value === "light" || value === "dark" ? value : "system";
+}
+
 /** Which third-party credential a stored key belongs to. */
 export type KeyKind = "gemini" | "github";
 

@@ -16,6 +16,13 @@ function suggestPassword(): string {
   return btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, "").slice(0, 12);
 }
 
+const FIELD_CLASS =
+  "mt-1.5 w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-heading placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-line";
+const LABEL_CLASS =
+  "text-[10px] font-bold uppercase tracking-[0.14em] text-muted";
+const ROW_ACTION_CLASS =
+  "rounded-lg border border-line px-2.5 py-1.5 text-xs font-semibold text-body transition hover:border-accent hover:text-accent-soft-fg disabled:cursor-not-allowed disabled:opacity-40";
+
 export function AdminUserTable({
   initial,
   currentUserId,
@@ -153,12 +160,12 @@ export function AdminUserTable({
   return (
     <div>
       {error && (
-        <div className="mb-4 rounded-lg border border-brick-500/30 bg-brick-50 p-3 text-sm text-brick-600">
+        <div className="mb-4 rounded-xl border border-danger-line bg-danger-bg p-3.5 text-sm font-medium text-danger-fg">
           {error}
         </div>
       )}
       {notice && (
-        <div className="mb-4 rounded-lg border border-pine-500/30 bg-pine-50 p-3 text-sm text-pine-700">
+        <div className="mb-4 rounded-xl border border-ok-line bg-ok-bg p-3.5 text-sm font-medium text-ok-fg">
           {notice}
         </div>
       )}
@@ -170,7 +177,7 @@ export function AdminUserTable({
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Filter by email or name…"
           aria-label="Filter users"
-          className="w-full rounded-md border border-ink-200 bg-white px-3 py-2 text-sm focus:border-pine-500 focus:outline-none focus:ring-2 focus:ring-pine-500/20 sm:max-w-xs"
+          className="w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-sm text-heading placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-line sm:max-w-xs"
         />
         <button
           type="button"
@@ -180,7 +187,11 @@ export function AdminUserTable({
               setDraft((d) => ({ ...d, password: suggestPassword() }));
             }
           }}
-          className="inline-flex w-max items-center rounded-md bg-pine-600 px-3 py-2 text-sm font-medium text-white hover:bg-pine-700"
+          className={`inline-flex w-max items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-bold transition ${
+            showCreate
+              ? "border border-line text-body hover:text-heading"
+              : "bg-accent text-accent-contrast shadow-brand hover:bg-accent-hover"
+          }`}
         >
           {showCreate ? "Cancel" : "+ Add project manager"}
         </button>
@@ -189,47 +200,42 @@ export function AdminUserTable({
       {showCreate && (
         <form
           onSubmit={create}
-          className="mb-6 rounded-xl border border-ink-200 bg-white p-5"
+          className="mb-6 rounded-2xl border border-line bg-surface p-5 shadow-card"
         >
-          <h2 className="text-sm font-semibold text-ink-900">
-            New project manager
-          </h2>
-          <p className="mt-1 text-xs text-ink-600">
-            They sign in with this email and password. There is no self-registration
-            and no password-reset email, so pass the password on securely.
+          <h2 className="text-sm font-bold text-heading">New project manager</h2>
+          <p className="mt-1 text-xs leading-relaxed text-body">
+            They sign in with this email and password. There is no
+            self-registration and no password-reset email, so pass the password on
+            securely.
           </p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <label className="block">
-              <span className="text-xs font-medium uppercase tracking-wide text-ink-400">
-                Email
-              </span>
+              <span className={LABEL_CLASS}>Email</span>
               <input
                 type="email"
                 required
                 value={draft.email}
                 onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
                 placeholder="pm@company.com"
-                className="mt-1 w-full rounded-md border border-ink-200 px-3 py-2 text-sm focus:border-pine-500 focus:outline-none focus:ring-2 focus:ring-pine-500/20"
+                className={FIELD_CLASS}
               />
             </label>
             <label className="block">
-              <span className="text-xs font-medium uppercase tracking-wide text-ink-400">
-                Name <span className="normal-case text-ink-400">(optional)</span>
+              <span className={LABEL_CLASS}>
+                Name <span className="font-medium normal-case">(optional)</span>
               </span>
               <input
                 type="text"
                 value={draft.name}
                 onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
                 placeholder="Jane Doe"
-                className="mt-1 w-full rounded-md border border-ink-200 px-3 py-2 text-sm focus:border-pine-500 focus:outline-none focus:ring-2 focus:ring-pine-500/20"
+                className={FIELD_CLASS}
               />
             </label>
             <label className="block">
-              <span className="text-xs font-medium uppercase tracking-wide text-ink-400">
-                Password
-              </span>
-              <div className="mt-1 flex gap-2">
+              <span className={LABEL_CLASS}>Password</span>
+              <div className="mt-1.5 flex gap-2">
                 <input
                   type="text"
                   required
@@ -238,7 +244,7 @@ export function AdminUserTable({
                   onChange={(e) =>
                     setDraft((d) => ({ ...d, password: e.target.value }))
                   }
-                  className="w-full rounded-md border border-ink-200 px-3 py-2 font-mono text-sm focus:border-pine-500 focus:outline-none focus:ring-2 focus:ring-pine-500/20"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 font-mono text-sm text-heading focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-line"
                 />
                 <button
                   type="button"
@@ -246,7 +252,7 @@ export function AdminUserTable({
                     setDraft((d) => ({ ...d, password: suggestPassword() }))
                   }
                   title="Generate a password"
-                  className="rounded-md border border-ink-200 px-2 text-xs font-medium text-ink-600 hover:border-pine-500/40 hover:text-pine-700"
+                  className="rounded-lg border border-line px-3 text-xs font-semibold text-body transition hover:border-accent hover:text-accent-soft-fg"
                 >
                   New
                 </button>
@@ -257,49 +263,52 @@ export function AdminUserTable({
           <button
             type="submit"
             disabled={creating}
-            className="mt-4 rounded-md bg-pine-600 px-4 py-2 text-sm font-medium text-white hover:bg-pine-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-5 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {creating ? "Creating…" : "Create account"}
           </button>
         </form>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-ink-200 bg-white">
+      <div className="overflow-x-auto rounded-2xl border border-line bg-surface shadow-card">
         <table className="w-full min-w-184 text-sm">
           <thead>
-            <tr className="border-b border-ink-200 text-left text-xs uppercase tracking-wide text-ink-400">
-              <th className="px-4 py-3 font-medium">User</th>
-              <th className="px-4 py-3 font-medium">Role</th>
-              <th className="px-4 py-3 font-medium">Keys</th>
-              <th className="px-4 py-3 font-medium">Last login</th>
-              <th className="px-4 py-3 text-right font-medium">Actions</th>
+            <tr className="border-b border-line bg-surface-2 text-left text-[10px] uppercase tracking-[0.14em] text-muted">
+              <th className="px-4 py-3 font-bold">User</th>
+              <th className="px-4 py-3 font-bold">Role</th>
+              <th className="px-4 py-3 font-bold">Keys</th>
+              <th className="px-4 py-3 font-bold">Last login</th>
+              <th className="px-4 py-3 text-right font-bold">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-ink-200">
+          <tbody className="divide-y divide-line">
             {visible.map((user) => {
               const isSelf = user.id === currentUserId;
               const isBusy = busyId === user.id;
               return (
-                <tr key={user.id} className={isBusy ? "opacity-60" : undefined}>
+                <tr
+                  key={user.id}
+                  className={`transition hover:bg-surface-2 ${isBusy ? "opacity-60" : ""}`}
+                >
                   <td className="px-4 py-3">
-                    <div className="font-medium text-ink-900">
+                    <div className="font-semibold text-heading">
                       {user.name || user.email}
                       {isSelf && (
-                        <span className="ml-2 text-[11px] font-normal text-ink-400">
+                        <span className="ml-2 text-[11px] font-normal text-muted">
                           (you)
                         </span>
                       )}
                     </div>
                     {user.name && (
-                      <div className="text-xs text-ink-400">{user.email}</div>
+                      <div className="text-xs text-muted">{user.email}</div>
                     )}
                   </td>
                   <td className="px-4 py-3">
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${
+                      className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
                         user.role === "admin"
-                          ? "bg-pine-50 text-pine-700 ring-pine-500/20"
-                          : "bg-ink-100 text-ink-600 ring-ink-200"
+                          ? "bg-role-fs-bg text-role-fs-fg"
+                          : "bg-surface-2 text-body ring-1 ring-inset ring-line"
                       }`}
                     >
                       {ROLE_LABELS[user.role]}
@@ -308,26 +317,26 @@ export function AdminUserTable({
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5 text-[11px]">
                       <span
-                        className={`rounded px-1.5 py-0.5 font-medium ${
+                        className={`rounded px-1.5 py-0.5 font-semibold ${
                           user.hasGeminiKey
-                            ? "bg-pine-50 text-pine-700"
-                            : "bg-ink-100 text-ink-400"
+                            ? "bg-ok-bg text-ok-fg"
+                            : "bg-surface-2 text-muted"
                         }`}
                       >
                         Gemini
                       </span>
                       <span
-                        className={`rounded px-1.5 py-0.5 font-medium ${
+                        className={`rounded px-1.5 py-0.5 font-semibold ${
                           user.hasGithubKey
-                            ? "bg-pine-50 text-pine-700"
-                            : "bg-ink-100 text-ink-400"
+                            ? "bg-ok-bg text-ok-fg"
+                            : "bg-surface-2 text-muted"
                         }`}
                       >
                         GitHub
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs text-ink-600">
+                  <td className="px-4 py-3 text-xs text-muted">
                     {user.lastLoginAt ? user.lastLoginAt.slice(0, 10) : "never"}
                   </td>
                   <td className="px-4 py-3">
@@ -336,7 +345,7 @@ export function AdminUserTable({
                         type="button"
                         disabled={isBusy}
                         onClick={() => void resetPassword(user.id, user.email)}
-                        className="rounded-md border border-ink-200 px-2 py-1 text-xs font-medium text-ink-600 hover:border-pine-500/40 hover:text-pine-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        className={ROW_ACTION_CLASS}
                       >
                         Reset password
                       </button>
@@ -350,16 +359,18 @@ export function AdminUserTable({
                             user.role === "admin" ? "project_manager" : "admin"
                           )
                         }
-                        className="rounded-md border border-ink-200 px-2 py-1 text-xs font-medium text-ink-600 hover:border-pine-500/40 hover:text-pine-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        className={ROW_ACTION_CLASS}
                       >
                         {user.role === "admin" ? "Demote" : "Make admin"}
                       </button>
                       <button
                         type="button"
                         disabled={isBusy || isSelf}
-                        title={isSelf ? "You cannot delete your own account" : undefined}
+                        title={
+                          isSelf ? "You cannot delete your own account" : undefined
+                        }
                         onClick={() => void remove(user.id, user.email)}
-                        className="rounded-md border border-ink-200 px-2 py-1 text-xs font-medium text-ink-600 hover:border-brick-500/40 hover:text-brick-600 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded-lg border border-line px-2.5 py-1.5 text-xs font-semibold text-body transition hover:border-danger-line hover:bg-danger-bg hover:text-danger-fg disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Delete
                       </button>
@@ -370,7 +381,7 @@ export function AdminUserTable({
             })}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-xs text-ink-400">
+                <td colSpan={5} className="px-4 py-10 text-center text-xs text-muted">
                   No user matches “{query}”.
                 </td>
               </tr>
@@ -379,7 +390,7 @@ export function AdminUserTable({
         </table>
       </div>
 
-      <p className="mt-4 text-xs text-ink-400">
+      <p className="mt-4 text-xs leading-relaxed text-muted">
         Key columns show only whether a credential is stored — values are encrypted
         and are never exposed, to admins included. Passwords are bcrypt hashes and
         cannot be read back either, only replaced.

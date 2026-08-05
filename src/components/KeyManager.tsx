@@ -87,12 +87,12 @@ export function KeyManager({ initial }: { initial: KeyStatus[] }) {
   return (
     <div className="space-y-4">
       {error && (
-        <div className="rounded-lg border border-brick-500/30 bg-brick-50 p-3 text-sm text-brick-600">
+        <div className="rounded-xl border border-danger-line bg-danger-bg p-3.5 text-sm font-medium text-danger-fg">
           {error}
         </div>
       )}
       {notice && (
-        <div className="rounded-lg border border-pine-500/30 bg-pine-50 p-3 text-sm text-pine-700">
+        <div className="rounded-xl border border-ok-line bg-ok-bg p-3.5 text-sm font-medium text-ok-fg">
           {notice}
         </div>
       )}
@@ -103,30 +103,35 @@ export function KeyManager({ initial }: { initial: KeyStatus[] }) {
         return (
           <section
             key={status.kind}
-            className="rounded-xl border border-ink-200 bg-white p-5"
+            className="rounded-2xl border border-line bg-surface p-5 shadow-card"
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="text-sm font-semibold text-ink-900">{meta.label}</h2>
-                <p className="mt-1 max-w-xl text-xs text-ink-600">{meta.help}</p>
+                <h2 className="text-sm font-bold text-heading">{meta.label}</h2>
+                <p className="mt-1 max-w-xl text-xs leading-relaxed text-body">
+                  {meta.help}
+                </p>
               </div>
               <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
                   status.isSet
-                    ? "bg-pine-50 text-pine-700 ring-pine-500/20"
-                    : "bg-ink-100 text-ink-600 ring-ink-200"
+                    ? "bg-ok-bg text-ok-fg ring-1 ring-inset ring-ok-line"
+                    : "bg-surface-2 text-muted ring-1 ring-inset ring-line"
                 }`}
               >
+                <span
+                  aria-hidden
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    status.isSet ? "bg-accent" : "bg-faint"
+                  }`}
+                />
                 {status.isSet ? "Saved" : "Not set"}
               </span>
             </div>
 
             {status.isSet && (
-              <p className="mt-3 text-xs text-ink-400">
-                Stored as{" "}
-                <code className="rounded bg-ink-100 px-1.5 py-0.5 font-mono text-ink-800">
-                  {status.preview}
-                </code>
+              <p className="mt-3 text-xs text-muted">
+                Stored as <code className="font-mono">{status.preview}</code>
                 {status.updatedAt && ` · updated ${status.updatedAt.slice(0, 10)}`}
               </p>
             )}
@@ -139,15 +144,17 @@ export function KeyManager({ initial }: { initial: KeyStatus[] }) {
                 onChange={(e) =>
                   setDrafts((prev) => ({ ...prev, [status.kind]: e.target.value }))
                 }
-                placeholder={status.isSet ? "Paste a new value to replace" : meta.placeholder}
+                placeholder={
+                  status.isSet ? "Paste a new value to replace" : meta.placeholder
+                }
                 aria-label={meta.label}
-                className="flex-1 rounded-md border border-ink-200 bg-white px-3 py-2 font-mono text-sm text-ink-900 placeholder:font-sans placeholder:text-ink-400 focus:border-pine-500 focus:outline-none focus:ring-2 focus:ring-pine-500/20"
+                className="flex-1 rounded-lg border border-line bg-surface px-3.5 py-2.5 font-mono text-sm text-heading placeholder:font-sans placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-line"
               />
               <button
                 type="button"
                 disabled={isBusy}
                 onClick={() => void save(status.kind)}
-                className="rounded-md bg-pine-600 px-4 py-2 text-sm font-medium text-white hover:bg-pine-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-accent-contrast transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isBusy ? "Saving…" : status.isSet ? "Update" : "Save"}
               </button>
@@ -156,7 +163,7 @@ export function KeyManager({ initial }: { initial: KeyStatus[] }) {
                   type="button"
                   disabled={isBusy}
                   onClick={() => void remove(status.kind)}
-                  className="rounded-md border border-ink-200 px-4 py-2 text-sm font-medium text-ink-600 hover:border-brick-500/40 hover:text-brick-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-lg border border-line px-4 py-2.5 text-sm font-semibold text-body transition hover:border-danger-line hover:bg-danger-bg hover:text-danger-fg disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Delete
                 </button>
@@ -167,7 +174,7 @@ export function KeyManager({ initial }: { initial: KeyStatus[] }) {
               href={meta.link}
               target="_blank"
               rel="noreferrer"
-              className="mt-3 inline-block text-xs font-medium text-pine-700 hover:text-pine-600"
+              className="mt-3 inline-block text-xs font-semibold text-accent-soft-fg transition hover:text-accent"
             >
               {meta.linkLabel} →
             </a>
@@ -175,7 +182,7 @@ export function KeyManager({ initial }: { initial: KeyStatus[] }) {
         );
       })}
 
-      <p className="text-xs leading-relaxed text-ink-400">
+      <p className="text-xs leading-relaxed text-muted">
         Keys are encrypted with AES-256-GCM before they are written to the
         database, and are never sent back to the browser — only the masked preview
         above. Deleting one removes it immediately; the app then falls back to a

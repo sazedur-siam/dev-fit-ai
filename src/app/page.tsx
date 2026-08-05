@@ -16,13 +16,10 @@ export default async function HomePage() {
 
   if (devs.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-ink-200 bg-white p-10 text-center">
-        <h1 className="text-xl font-semibold text-ink-900">No developers yet</h1>
-        <p className="mx-auto mt-2 max-w-md text-sm text-ink-600">
-          The cohort is stored in MongoDB. Seed it with{" "}
-          <code className="rounded bg-ink-100 px-1.5 py-0.5 text-xs">
-            npm run seed
-          </code>{" "}
+      <div className="rounded-2xl border border-dashed border-line-strong bg-surface p-12 text-center shadow-card">
+        <h1 className="text-xl font-bold text-heading">No developers yet</h1>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-body">
+          The cohort is stored in MongoDB. Seed it with <code>npm run seed</code>{" "}
           and reload.
         </p>
       </div>
@@ -31,24 +28,28 @@ export default async function HomePage() {
 
   return (
     <div>
-      <section className="rounded-2xl border border-ink-200 bg-white p-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <section className="rounded-2xl border border-line bg-surface p-6 shadow-card sm:p-7">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-ink-900">
-              Developers List
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary-soft px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-secondary-soft-fg">
+              Cohort
+            </span>
+            <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-heading sm:text-3xl">
+              Developers
             </h1>
-            <p className="mt-1 max-w-2xl text-sm text-ink-600">
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-body">
               A seeded set of {devs.length} developers. Filter by name or stack,
               open one to see their contribution profile, or paste a repo URL on{" "}
-              <span className="font-medium">Check fit</span> to see who fits it
-              best.
+              <span className="font-semibold text-heading">Check fit</span> to see
+              who fits it best.
             </p>
           </div>
           <Link
             href="/fit"
-            className="inline-flex w-max items-center rounded-md bg-pine-600 px-4 py-2 text-sm font-medium text-white hover:bg-pine-700"
+            className="inline-flex w-max items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-accent-contrast shadow-brand transition hover:bg-accent-hover"
           >
-            Check fit for a repo →
+            Check fit for a repo
+            <span aria-hidden>→</span>
           </Link>
         </div>
       </section>
