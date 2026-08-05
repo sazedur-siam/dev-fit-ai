@@ -81,7 +81,9 @@ orchestrator and the only place that composes all of the above.
 | [src/lib/developerHelpers.ts](src/lib/developerHelpers.ts) | `MockDeveloper` → `DeveloperView` (derives `languages`, `netLines`). |
 | [src/data/developers.ts](src/data/developers.ts) | 10 seeded developers: 4 frontend, 3 backend, 3 fullstack. |
 | [src/app/api/](src/app/api/) | Eight route handlers, all `runtime = "nodejs"`. |
-| [src/components/](src/components/) | Mostly presentational; `DeveloperBrowser` and `RepoPicker` are the two client components that hold state. |
+| [src/components/](src/components/) | Mostly presentational; the `"use client"` ones are listed under Conventions. |
+| [src/app/globals.css](src/app/globals.css) | The entire design system — raw ramps, semantic tokens, light/dark. See Design system. |
+| [src/app/icon.svg](src/app/icon.svg) | Favicon, via Next's file convention. Same artwork as `Logo.tsx`. |
 
 Always consume developers through `getAllDevelopers()` / `getDeveloperById()`, never
 by importing `DEVELOPERS` directly — the helpers derive `languages` and `netLines`
@@ -257,14 +259,12 @@ Both unblock only when the upstream plugins ship support. Re-check with
 - **`next lint` no longer exists.** `npm run lint` calls `eslint .` against
   [eslint.config.mjs](eslint.config.mjs) (flat config composing
   `eslint-config-next/core-web-vitals` + `/typescript`).
-- **Tailwind is CSS-first — there is no `tailwind.config.ts`.** The `pine` / `ink` /
-  `brick` / `amber` palette is declared in an `@theme` block in
-  [src/app/globals.css](src/app/globals.css) as `--color-<name>-<shade>`, which is
-  what generates `bg-pine-600`, `text-ink-900`, `divide-ink-200`, etc. Add new
-  brand colors there, not in a JS config. PostCSS uses `@tailwindcss/postcss`;
-  `autoprefixer` was removed (Tailwind 4 prefixes via Lightning CSS).
-  The `amber` hexes are pinned to Tailwind 3's values so the v4 OKLCH palette
-  doesn't shift the warning tone.
+- **Tailwind is CSS-first — there is no `tailwind.config.ts`.** The whole design
+  system lives in [src/app/globals.css](src/app/globals.css). Add colors there,
+  not in a JS config. PostCSS uses `@tailwindcss/postcss`; `autoprefixer` was
+  removed (Tailwind 4 prefixes via Lightning CSS). The `amber` hexes are pinned
+  to Tailwind 3's values so the v4 OKLCH palette doesn't shift the warning tone.
+  See **Design system** below before restyling anything.
 - **`next dev` writes `AGENTS.md` and may write `CLAUDE.md`.** The generator
   (`node_modules/next/dist/server/lib/generate-agent-files.js`) upserts a managed
   `<!-- BEGIN:nextjs-agent-rules -->` block. Because `AGENTS.md` exists and hosts
@@ -298,6 +298,65 @@ Smaller notes:
   (`geminiJSON()`), and both prompts have field-level fallbacks in the analyzer. A
   malformed model response degrades rather than 500s.
 
+## Design system
+
+All of it is in [src/app/globals.css](src/app/globals.css), in two layers. The
+split is what makes dark mode work, so keep it:
+
+1. **Raw ramps** (`@theme`) — fixed hues. `brand` (Electric Emerald, 500 =
+   `#10B981`), `iris` (Indigo), `plum`, `amber`, `brick`, `ink` (Slate).
+   `brand-500` is that hex in every theme.
+2. **Semantic tokens** (`@theme inline`) — roles, not hues: `surface`, `canvas`,
+   `line`, `heading`, `body`, `muted`, `accent`, `accent-contrast`, `ok-*`,
+   `warn-*`, `danger-*`, `role-fe-*` / `role-be-*` / `role-fs-*`. Each resolves
+   through a `--df-*` variable, and `inline` makes the utility emit
+   `var(--df-…)` rather than a baked hex — so redefining one variable under a
+   dark scope re-themes every utility at once.
+
+**Components use the semantic layer.** `bg-surface`, not `bg-white`;
+`text-body`, not `text-ink-700`; `border-line`, not `border-ink-200`. Reach for
+a raw ramp only when you mean that specific hue regardless of theme (the verdict
+dots, the logo gradient). A hardcoded `bg-white` is a dark-mode bug.
+
+Two things worth knowing before you touch a colour:
+
+- **The primary CTA is spec'd as `#10B981` with white text, which measures
+  2.1:1** — under WCAG AA for body-sized text. That is a deliberate brand call,
+  not an oversight. Everything else clears AA. `--df-accent` in the light block
+  is the single line to change if that trade stops being acceptable (`#059669` →
+  3.9:1, `#047857` → 5.3:1).
+- **On dark, the accent brightens to `#34D399` and text on it goes dark**
+  (`--df-accent-contrast`), which is why `text-accent-contrast` exists instead of
+  a hardcoded `text-white`.
+
+### Theming is three-state
+
+`light`, `dark`, and `system` — where **system is the absence of a class** on
+`<html>`, resolved by a `prefers-color-scheme` block in the CSS. That is the
+whole reason there is no blocking inline theme script and no flash on first
+paint: the server stamps `class="light"` / `class="dark"` from the
+`THEME_COOKIE` cookie (same pattern as `SIDEBAR_COOKIE`, same reason), and the
+unset case needs no JS at all.
+
+[ThemeToggle.tsx](src/components/ThemeToggle.tsx) exports a segmented control
+and a single cycling button; both write the cookie and toggle the class on
+`document.documentElement` directly. There is no theme context or provider —
+don't add one. The dark values are written once as `--df-dark-*` and pointed at
+from both activation scopes, so the two can't drift.
+
+The `dark:` variant is wired to all three states and is available, but most
+components never need it — if you're reaching for `dark:`, check whether a
+semantic token already covers the case.
+
+### Brand mark
+
+[Logo.tsx](src/components/Logo.tsx) — angle brackets clamping a barbell, on a
+rounded tile. `app/icon.svg` is the same artwork and is the favicon via Next's
+file convention. The tile fill reads `--df-logo-tile` because a near-black tile
+disappears against the dark canvas. [global-error.tsx](src/app/global-error.tsx)
+inlines its own copy of the glyph and its own `<style>` block on purpose — the
+stylesheet may not have loaded by the time it renders.
+
 ## Conventions
 
 - TypeScript strict. Import via the `@/*` alias (`@/lib/...`, `@/components/...`),
@@ -305,10 +364,13 @@ Smaller notes:
 - Named exports for components and lib functions; default exports only where
   Next requires them (pages, layouts, route handlers).
 - Server-first. Every `page.tsx` is a **server** component; interactivity lives in
-  `src/components/*` client components: `AppShell`, `FitView`, `DeveloperBrowser`,
-  `RepoPicker`, `KeyManager`, `AdminUserTable`, `LoginForm`, `AuthButtons`. Pages
-  fetch and guard, clients render and mutate — `/fit` follows this too (the form is
-  `FitView`).
+  `src/components/*` client components: `AppShell`, `ThemeToggle`, `FitView`,
+  `DeveloperBrowser`, `RepoPicker`, `KeyManager`, `AdminUserTable`, `LoginForm`,
+  `AuthButtons`. Pages fetch and guard, clients render and mutate — `/fit`
+  follows this too (the form is `FitView`). `Logo`, `ArchetypeBadge`,
+  `VerdictBadge`, `SubScoreBar`, `DeveloperCard` and `FullScreenLoader` are
+  server components; keep them that way (`Logo` avoids `useId()` for exactly
+  this reason).
 - **Navigation is the collapsible sidebar in [AppShell.tsx](src/components/AppShell.tsx)**,
   which the root layout wraps around every signed-in page (signed out, `/login`
   renders bare). Nav items are one `NAV` array — add a route there, with
