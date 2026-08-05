@@ -485,12 +485,19 @@ can be tuned without touching the engine.
 - Weight repository *relevance* (domain similarity), not just raw volume.
 - Detect frameworks per developer from their repos rather than only languages.
 
-**Real data**
-- Replace the seed file with real GitHub contribution data per developer
-  (`/users/{u}/repos`, commit stats, languages).
-- Optional import from an HR or resource-planning system to seed the cohort.
-- Persist cohorts and past analyses in a database so rankings can be compared
-  over time.
+**Real data** — see
+[docs/real-git-data-feasibility.md](docs/real-git-data-feasibility.md) for the
+investigation, including what the GitHub API can and cannot supply and the four
+attribution traps that produce confident-but-wrong numbers.
+
+- Replace the seed file with real profiles built from git history. Clone the repos
+  and parse `git log --numstat` locally — the REST API gives per-author *volume* but
+  no per-author language breakdown, and doing it via the API costs one request per
+  commit.
+- Add `git blame` survival (how much of what someone wrote is still there) as the
+  strongest available quality signal, plus recency weighting.
+- Optional import from an HR or resource-planning system for the identity mapping.
+- Persist cohorts and past analyses so rankings can be compared over time.
 
 **Product**
 - Optional "Sign in with GitHub" alongside email+password, so the repo picker
