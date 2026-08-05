@@ -137,7 +137,11 @@ export async function GET() {
       if (users === 0)
         problems.push("No users — run `npm run seed` to create the admin account");
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      // Collapse whitespace: driver errors carry trailing newlines, which make the
+      // JSON payload awkward to read and to parse.
+      const message = (err instanceof Error ? err.message : String(err))
+        .replace(/\s+/g, " ")
+        .trim();
       database = { reachable: false, error: message.slice(0, 200) };
 
       // Atlas rejects a non-allowlisted IP by aborting the TLS handshake rather
