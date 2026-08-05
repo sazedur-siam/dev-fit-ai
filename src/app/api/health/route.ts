@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { resolveSrv } from "node:dns/promises";
+import { connect as tlsConnect } from "node:tls";
 import { COLLECTIONS, getDb } from "@/lib/mongodb";
 
 export const runtime = "nodejs";
@@ -26,6 +28,74 @@ function encryptionKeyValid(): boolean {
     ? Buffer.from(raw, "hex")
     : Buffer.from(raw, "base64");
   return buf.length === 32;
+}
+
+/**
+ * Probe the network path to the database independently of the driver, so a failure
+ * can be attributed rather than guessed at.
+ *
+ * The layers fail distinguishably: DNS says the cluster name is wrong, TCP says
+ * something is blocking the port, and a TLS handshake that opens and is then torn
+ * down is how Atlas rejects an IP that is not on its access list. Hostnames and
+ * credentials are never reported.
+ */
+async function probeNetworkPath(): Promise<Record<string, unknown>> {
+  const uri = process.env.MONGODB_URI?.trim();
+  if (!uri) return { checked: false };
+
+  const match = uri.match(/^mongodb(\+srv)?:\/\/(?:[^@]*@)?([^/?,]+)/i);
+  if (!match) return { checked: false, reason: "could not parse host from URI" };
+
+  const isSrv = Boolean(match[1]);
+  const hostFromUri = match[2].split(":")[0];
+
+  let target = hostFromUri;
+  let port = Number(match[2].split(":")[1] ?? 27017);
+  let srvRecords: number | null = null;
+
+  if (isSrv) {
+    try {
+      const records = await resolveSrv(`_mongodb._tcp.${hostFromUri}`);
+      srvRecords = records.length;
+      if (records.length === 0) {
+        return { dns: false, reason: "SRV lookup returned no records" };
+      }
+      target = records[0].name;
+      port = records[0].port;
+    } catch (err) {
+      return {
+        dns: false,
+        srvRecords,
+        reason: `SRV lookup failed: ${err instanceof Error ? err.message : String(err)}`.slice(0, 160),
+      };
+    }
+  }
+
+  const tls = await new Promise<Record<string, unknown>>((resolve) => {
+    const socket = tlsConnect(
+      { host: target, port, servername: target, timeout: 6000 },
+      () => {
+        // Handshake completed: the IP is permitted and TLS is sound.
+        socket.destroy();
+        resolve({ tcp: true, tlsHandshake: true });
+      }
+    );
+    socket.on("error", (err: NodeJS.ErrnoException) => {
+      socket.destroy();
+      resolve({
+        tcp: err.code !== "ECONNREFUSED" && err.code !== "ENOTFOUND",
+        tlsHandshake: false,
+        code: err.code ?? null,
+        message: String(err.message).slice(0, 160),
+      });
+    });
+    socket.on("timeout", () => {
+      socket.destroy();
+      resolve({ tcp: false, tlsHandshake: false, code: "TIMEOUT" });
+    });
+  });
+
+  return { dns: true, srvRecords, port, ...tls };
 }
 
 export async function GET() {
@@ -88,8 +158,34 @@ export async function GET() {
     }
   }
 
+  // Only worth the extra round trip when the driver could not connect.
+  const network = database.reachable ? { checked: false } : await probeNetworkPath();
+
+  if (!database.reachable && network.dns === true) {
+    if (network.tlsHandshake === true) {
+      problems.push(
+        "TLS to the database succeeded but the driver could not connect — the network path is fine, so check the username, password and database name in MONGODB_URI."
+      );
+    } else if (network.tcp === true) {
+      problems.push(
+        "The port opens but the TLS handshake is torn down — the classic signature of an IP missing from the Atlas access list. Confirm 0.0.0.0/0 is listed AND shows as Active, and that it is on the same Atlas project as this cluster."
+      );
+    } else {
+      problems.push(
+        "Cannot open a connection to the database host at all — check the cluster is not paused, and that outbound traffic is permitted."
+      );
+    }
+  }
+
   return NextResponse.json(
-    { ok: problems.length === 0, problems, env, database },
+    {
+      ok: problems.length === 0,
+      problems,
+      env,
+      database,
+      network,
+      runtime: { node: process.version },
+    },
     { status: problems.length === 0 ? 200 : 503 }
   );
 }
