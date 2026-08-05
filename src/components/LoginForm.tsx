@@ -20,32 +20,57 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
     setBusy(true);
     setError(null);
 
-    const res = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    try {
+      const res = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
 
-    if (res?.error) {
-      // Intentionally not "no such user" vs "wrong password".
-      setError("Incorrect email or password.");
-      setBusy(false);
-      return;
-    }
-
-    // Land on the right page for this role. The session is fresh, so read it back
-    // rather than assuming.
-    let destination = callbackUrl ?? null;
-    if (!destination) {
-      try {
-        const session = await fetch("/api/auth/session").then((r) => r.json());
-        destination = session?.user?.role === "admin" ? "/admin" : "/fit";
-      } catch {
-        destination = "/fit";
+      // `signIn` resolves to undefined when the request never produced a usable
+      // response — treat that as a failure rather than falling through to a
+      // navigation that cannot work.
+      if (!res) {
+        setError("Couldn't reach the sign-in service. Please try again.");
+        return;
       }
+
+      if (res.error) {
+        // NextAuth reports a misconfigured server as "Configuration". Calling that
+        // an incorrect password would send someone hunting for the wrong problem,
+        // so the two are distinguished — while still never revealing whether a
+        // given account exists.
+        setError(
+          res.error === "Configuration"
+            ? "The server isn't configured for sign-in yet — check /api/health."
+            : "Incorrect email or password."
+        );
+        return;
+      }
+
+      // Land on the right page for this role. The session is fresh, so read it
+      // back rather than assuming.
+      let destination = callbackUrl ?? null;
+      if (!destination) {
+        try {
+          const session = await fetch("/api/auth/session").then((r) => r.json());
+          destination = session?.user?.role === "admin" ? "/admin" : "/fit";
+        } catch {
+          destination = "/fit";
+        }
+      }
+      router.replace(destination);
+      router.refresh();
+    } catch (err) {
+      // Without this, any throw left the button on "Signing in…" forever with no
+      // message, because the reset only happened on the paths that returned early.
+      console.error("[login] sign-in failed:", err);
+      setError("Sign-in failed. Please try again.");
+    } finally {
+      // Runs on the success path too. Harmless there — the component unmounts on
+      // navigation — and it guarantees the form is never left stuck.
+      setBusy(false);
     }
-    router.replace(destination);
-    router.refresh();
   }
 
   return (

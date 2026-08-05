@@ -1,7 +1,31 @@
-import { getServerSession } from "next-auth";
+import { getServerSession, type Session } from "next-auth";
+import { unstable_rethrow } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { getUserById } from "@/lib/db/users";
 import type { AppUser } from "@/lib/types";
+
+/**
+ * Read the session without letting a misconfiguration take the site down.
+ *
+ * NextAuth throws in production when NEXTAUTH_SECRET is absent. Because the
+ * session is read on every route, an unguarded call turns one missing env var into
+ * an opaque 500 on every page — including /login, the only page that can explain
+ * what is wrong. Treating a failed read as "signed out" keeps the app reachable
+ * and self-diagnosing.
+ */
+export async function readSessionSafe(): Promise<Session | null> {
+  try {
+    return await getServerSession(authOptions);
+  } catch (err) {
+    // Next signals redirect(), notFound() and dynamic-rendering decisions by
+    // throwing. Swallowing those breaks the framework rather than the request —
+    // during a build it silently reported "signed out" for /_not-found instead of
+    // letting Next mark the route dynamic. Only genuine failures fall through.
+    unstable_rethrow(err);
+    console.error("[session] read failed — treating as signed out:", err);
+    return null;
+  }
+}
 
 /**
  * Authorization helpers. These re-read the user from MongoDB rather than
@@ -21,7 +45,7 @@ export class AuthError extends Error {
 
 /** The signed-in user, or null. */
 export async function getCurrentUser(): Promise<AppUser | null> {
-  const session = await getServerSession(authOptions);
+  const session = await readSessionSafe();
   const id = session?.user?.id;
   if (!id) return null;
   return getUserById(id);

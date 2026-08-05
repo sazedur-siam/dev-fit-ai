@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions, isAdminConfigured, isAuthConfigured } from "@/lib/auth";
+import { isAdminConfigured, isAuthConfigured } from "@/lib/auth";
+import { readSessionSafe } from "@/lib/session";
 import { LoginForm } from "@/components/LoginForm";
 import { ROLE_HOME } from "@/lib/types";
 
@@ -11,7 +11,7 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ callbackUrl?: string }>;
 }) {
-  const session = await getServerSession(authOptions);
+  const session = await readSessionSafe();
   if (session?.user) {
     redirect(ROLE_HOME[session.user.role] ?? "/fit");
   }
