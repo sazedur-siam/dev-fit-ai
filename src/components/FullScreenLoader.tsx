@@ -14,20 +14,20 @@ export function FullScreenLoader({
       role="status"
       aria-live="polite"
       aria-busy="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 px-6 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/60 px-6 backdrop-blur-sm"
     >
-      <div className="w-full max-w-sm rounded-2xl border border-ink-200 bg-white p-8 text-center shadow-2xl">
+      <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-8 text-center shadow-pop">
         <div className="relative mx-auto h-14 w-14">
           {/* Soft halo behind the ring — pure decoration. */}
-          <span className="absolute inset-0 animate-ping rounded-full bg-pine-500/15 motion-reduce:animate-none" />
-          <span className="absolute inset-0 animate-spin rounded-full border-[3px] border-ink-200 border-t-pine-600 motion-reduce:animate-none" />
+          <span className="absolute inset-0 animate-ping rounded-full bg-accent/15 motion-reduce:animate-none" />
+          <span className="absolute inset-0 animate-spin rounded-full border-[3px] border-line-strong border-t-accent motion-reduce:animate-none" />
         </div>
 
-        <p className="mt-6 text-sm font-semibold text-ink-900">{message}</p>
-        {hint && <p className="mt-2 text-xs leading-relaxed text-ink-400">{hint}</p>}
+        <p className="mt-6 text-sm font-bold text-heading">{message}</p>
+        {hint && <p className="mt-2 text-xs leading-relaxed text-muted">{hint}</p>}
 
-        <div className="mt-6 h-1 w-full overflow-hidden rounded-full bg-ink-100">
-          <div className="h-full w-1/3 animate-pulse rounded-full bg-pine-500 motion-reduce:animate-none" />
+        <div className="mt-6 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+          <div className="h-full w-1/3 animate-pulse rounded-full bg-accent motion-reduce:animate-none" />
         </div>
       </div>
     </div>

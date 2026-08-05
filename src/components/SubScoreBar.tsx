@@ -1,29 +1,38 @@
 export function SubScoreBar({
   label,
   value,
-  tone = "pine",
+  tone = "accent",
 }: {
   label: string;
   value: number;
-  tone?: "pine" | "amber" | "brick";
+  tone?: "accent" | "secondary" | "amber" | "brick";
 }) {
   const toneClass = {
-    pine: "bg-pine-500",
+    accent: "bg-accent",
+    secondary: "bg-secondary",
     amber: "bg-amber-500",
     brick: "bg-brick-500",
   }[tone];
+  const pct = Math.max(0, Math.min(100, value));
   return (
     <div className="text-xs">
       <div className="flex items-baseline justify-between">
-        <span className="text-ink-600">{label}</span>
-        <span className="font-semibold text-ink-800">
+        <span className="font-medium text-muted">{label}</span>
+        <span className="font-bold tabular-nums text-heading">
           {value.toFixed(1)}
         </span>
       </div>
-      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-ink-100">
+      <div
+        className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-surface-2 ring-1 ring-inset ring-line"
+        role="meter"
+        aria-label={label}
+        aria-valuenow={Math.round(pct)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
         <div
-          className={`h-full ${toneClass}`}
-          style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+          className={`h-full rounded-full transition-[width] duration-500 ${toneClass}`}
+          style={{ width: `${pct}%` }}
         />
       </div>
     </div>

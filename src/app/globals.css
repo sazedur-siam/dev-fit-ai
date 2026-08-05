@@ -1,48 +1,491 @@
 @import "tailwindcss";
 
 /**
- * Tailwind v4 is CSS-first: the palette that used to live in
- * `tailwind.config.ts` under `theme.extend.colors` is declared here instead.
- * `--color-<name>-<shade>` generates the matching `bg-`/`text-`/`border-`/
- * `ring-`/`divide-` utilities, so `bg-pine-600` etc. keep working unchanged.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *  DevFit design tokens
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Tailwind v4 is CSS-first: everything that used to live in `tailwind.config.ts`
+ * under `theme.extend` is declared here. There is no JS config file — this block
+ * IS the config.
+ *
+ * Two layers, and the split is the whole trick behind dark mode:
+ *
+ *   1. RAW RAMPS (`@theme`)        — fixed hues. `brand-500` is #10B981 in every
+ *                                    theme. Use these when you mean *that* hue.
+ *   2. SEMANTIC TOKENS (`@theme inline`) — roles, not hues: `surface`, `body`,
+ *                                    `line`, `accent`. `inline` makes the
+ *                                    generated utility emit `var(--df-…)` rather
+ *                                    than a baked hex, so redefining one `--df-*`
+ *                                    under a dark scope re-themes every utility
+ *                                    that uses it. Components should reach for
+ *                                    these — `bg-surface`, not `bg-white`.
+ *
+ * THEMING IS THREE-STATE: light, dark, and system.
+ *   <html class="light">  → always light
+ *   <html class="dark">   → always dark
+ *   <html> (no class)     → follow the OS
+ * The server stamps the class from a cookie, and the system case is pure CSS
+ * (see the `prefers-color-scheme` block), so there is no theme flash on first
+ * paint and no blocking inline script.
  */
+
+/**
+ * Class-based dark variant with a media fallback, matching the three states
+ * above. Most components never need `dark:` — the semantic tokens flip on their
+ * own — but it exists for the handful of cases a colour token can't express.
+ */
+@custom-variant dark {
+  &:where(.dark, .dark *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(html:not(.light) *, html:not(.light)) {
+      @slot;
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Layer 1 · Raw ramps
+   ═══════════════════════════════════════════════════════════════════════════ */
 @theme {
-  --color-pine-50: #eef7f2;
-  --color-pine-100: #d4ecdf;
-  --color-pine-500: #2f855a;
-  --color-pine-600: #276749;
-  --color-pine-700: #22543d;
+  /* ── Brand · Electric Emerald ─────────────────────────────────────────── */
+  --color-brand-50: #ecfdf5;
+  --color-brand-100: #d1fae5;
+  --color-brand-200: #a7f3d0;
+  --color-brand-300: #6ee7b7;
+  --color-brand-400: #34d399;
+  --color-brand-500: #10b981; /* PRIMARY ACCENT */
+  --color-brand-600: #059669; /* PRIMARY HOVER  */
+  --color-brand-700: #047857;
+  --color-brand-800: #065f46;
+  --color-brand-900: #064e3b;
+
+  /* ── Secondary · Indigo ───────────────────────────────────────────────── */
+  --color-iris-50: #eef2ff;
+  --color-iris-100: #e0e7ff;
+  --color-iris-200: #c7d2fe;
+  --color-iris-300: #a5b4fc;
+  --color-iris-400: #818cf8;
+  --color-iris-500: #6366f1; /* SECONDARY ACCENT */
+  --color-iris-600: #4f46e5;
+  --color-iris-700: #4338ca;
+
+  /* ── Categorical · Purple (Backend) ───────────────────────────────────── */
+  --color-plum-100: #f3e8ff;
+  --color-plum-300: #d8b4fe;
+  --color-plum-500: #a855f7;
+  --color-plum-700: #6b21a8;
 
   /* Same hexes Tailwind v3's default amber used — pinned so the v4 OKLCH
      palette doesn't shift the warning tone under us. */
   --color-amber-50: #fffbeb;
+  --color-amber-100: #fef3c7;
+  --color-amber-300: #fcd34d;
   --color-amber-500: #f59e0b;
   --color-amber-600: #d97706;
+  --color-amber-700: #b45309;
 
   --color-brick-50: #fef2f2;
+  --color-brick-100: #fee2e2;
+  --color-brick-300: #fca5a5;
   --color-brick-500: #dc2626;
   --color-brick-600: #b91c1c;
+  --color-brick-700: #991b1b;
 
+  /* ── Neutral · Slate ──────────────────────────────────────────────────── */
   --color-ink-50: #f8fafc;
   --color-ink-100: #f1f5f9;
   --color-ink-200: #e2e8f0;
+  --color-ink-300: #cbd5e1;
   --color-ink-400: #94a3b8;
+  --color-ink-500: #64748b;
   --color-ink-600: #475569;
+  --color-ink-700: #334155;
   --color-ink-800: #1e293b;
   --color-ink-900: #0f172a;
+  --color-ink-950: #0a0f1a;
 }
 
-:root {
+/* ═══════════════════════════════════════════════════════════════════════════
+   Layer 2 · Semantic tokens (theme-aware)
+
+   These are what components use. Every one resolves through a `--df-*`
+   variable, so the light/dark definitions below are the only place a theme
+   decision is made.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@theme inline {
+  /* Surfaces */
+  --color-canvas: var(--df-canvas); /* page background            */
+  --color-surface: var(--df-surface); /* cards, sidebar, popovers   */
+  --color-surface-2: var(--df-surface-2); /* inset fills, neutral tags  */
+  --color-surface-3: var(--df-surface-3); /* hover on a neutral fill    */
+
+  /* Lines */
+  --color-line: var(--df-line); /* default border / divider   */
+  --color-line-strong: var(--df-line-strong);
+
+  /* Type */
+  --color-heading: var(--df-heading);
+  --color-body: var(--df-body);
+  --color-muted: var(--df-muted);
+  --color-faint: var(--df-faint); /* decorative only — not for copy */
+
+  /* Primary accent */
+  --color-accent: var(--df-accent);
+  --color-accent-hover: var(--df-accent-hover);
+  --color-accent-contrast: var(--df-accent-contrast); /* text ON accent */
+  --color-accent-soft: var(--df-accent-soft);
+  --color-accent-soft-fg: var(--df-accent-soft-fg);
+  --color-accent-line: var(--df-accent-line);
+
+  /* Secondary accent */
+  --color-secondary: var(--df-secondary);
+  --color-secondary-soft: var(--df-secondary-soft);
+  --color-secondary-soft-fg: var(--df-secondary-soft-fg);
+
+  /* Role badges */
+  --color-role-fe-bg: var(--df-role-fe-bg);
+  --color-role-fe-fg: var(--df-role-fe-fg);
+  --color-role-be-bg: var(--df-role-be-bg);
+  --color-role-be-fg: var(--df-role-be-fg);
+  --color-role-fs-bg: var(--df-role-fs-bg);
+  --color-role-fs-fg: var(--df-role-fs-fg);
+
+  /* States */
+  --color-ok-bg: var(--df-ok-bg);
+  --color-ok-fg: var(--df-ok-fg);
+  --color-ok-line: var(--df-ok-line);
+  --color-warn-bg: var(--df-warn-bg);
+  --color-warn-fg: var(--df-warn-fg);
+  --color-warn-line: var(--df-warn-line);
+  --color-danger-bg: var(--df-danger-bg);
+  --color-danger-fg: var(--df-danger-fg);
+  --color-danger-line: var(--df-danger-line);
+
+  /* Elevation — `shadow-card` is the resting elevation for every surface. */
+  --shadow-card: var(--df-shadow-card);
+  --shadow-card-hover: var(--df-shadow-card-hover);
+  --shadow-pop: var(--df-shadow-pop);
+  --shadow-brand: var(--df-shadow-brand);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Light theme — the default
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root,
+html.light {
   color-scheme: light;
+
+  --df-canvas: #f8fafc;
+  --df-surface: #ffffff;
+  --df-surface-2: #f1f5f9;
+  --df-surface-3: #e2e8f0;
+
+  --df-line: #e2e8f0;
+  --df-line-strong: #cbd5e1;
+
+  --df-heading: #0f172a;
+  --df-body: #334155;
+  --df-muted: #64748b;
+  --df-faint: #94a3b8;
+
+  /**
+   * Primary CTA fill, per the brand spec: #10B981 with white text.
+   *
+   * Worth knowing before you ship: white on #10B981 measures 2.1:1, which is
+   * under WCAG AA for body-sized text (bold 14px does not qualify as "large").
+   * Everything else in this file clears AA. If you want the CTA to as well,
+   * this is the single line to change — `#059669` gives 3.9:1, `#047857` gives
+   * 5.3:1, and nothing else needs touching.
+   */
+  --df-accent: #10b981;
+  --df-accent-hover: #059669;
+  --df-accent-contrast: #ffffff;
+  --df-accent-soft: #ecfdf5;
+  --df-accent-soft-fg: #047857;
+  --df-accent-line: rgb(16 185 129 / 0.25);
+
+  --df-secondary: #6366f1;
+  --df-secondary-soft: #eef2ff;
+  --df-secondary-soft-fg: #4338ca;
+
+  --df-role-fe-bg: #e0e7ff;
+  --df-role-fe-fg: #4338ca;
+  --df-role-be-bg: #f3e8ff;
+  --df-role-be-fg: #6b21a8;
+  --df-role-fs-bg: #d1fae5;
+  --df-role-fs-fg: #065f46;
+
+  --df-ok-bg: #ecfdf5;
+  --df-ok-fg: #047857;
+  --df-ok-line: rgb(16 185 129 / 0.25);
+  --df-warn-bg: #fffbeb;
+  --df-warn-fg: #b45309;
+  --df-warn-line: rgb(245 158 11 / 0.3);
+  --df-danger-bg: #fef2f2;
+  --df-danger-fg: #b91c1c;
+  --df-danger-line: rgb(220 38 38 / 0.22);
+
+  --df-shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.05);
+  --df-shadow-card-hover:
+    0 10px 26px -8px rgb(15 23 42 / 0.12), 0 3px 8px -3px rgb(15 23 42 / 0.06);
+  --df-shadow-pop:
+    0 24px 60px -18px rgb(15 23 42 / 0.28), 0 6px 16px -8px rgb(15 23 42 / 0.14);
+  --df-shadow-brand: 0 6px 18px -6px rgb(16 185 129 / 0.45);
+
+  /* Non-utility odds and ends that still have to follow the theme. */
+  --df-logo-tile: #0f172a;
+  --df-glow-a: rgb(16 185 129 / 0.07);
+  --df-glow-b: rgb(99 102 241 / 0.06);
+  --df-scroll-thumb: #cbd5e1;
+  --df-scroll-thumb-hover: #94a3b8;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Dark theme
+
+   Not an inversion — a designed set. Two things deliberately differ from a
+   naive flip:
+     · the accent brightens to brand-400, because #10B981 loses its punch
+       against a dark canvas;
+     · text ON the accent goes dark rather than white (9.5:1 instead of 2.1:1),
+       which is the standard treatment for a bright fill on a dark theme.
+
+   Defined twice — once for the explicit `.dark` class, once for
+   `prefers-color-scheme` when no class has been chosen. Same declarations, so
+   the `--df-dark-*` indirection below keeps them from drifting apart.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@layer base {
+  html.dark,
+  html:where(:not(.light)) {
+    --df-dark-canvas: #0a0f1a;
+    --df-dark-surface: #121a2a;
+    --df-dark-surface-2: #1a2436;
+    --df-dark-surface-3: #232f45;
+
+    --df-dark-line: #26324a;
+    --df-dark-line-strong: #37455f;
+
+    --df-dark-heading: #f1f5f9;
+    --df-dark-body: #cbd5e1;
+    --df-dark-muted: #94a3b8;
+    --df-dark-faint: #718099;
+
+    --df-dark-accent: #34d399;
+    --df-dark-accent-hover: #6ee7b7;
+    --df-dark-accent-contrast: #052e20;
+    --df-dark-accent-soft: #0f2a21;
+    --df-dark-accent-soft-fg: #6ee7b7;
+    --df-dark-accent-line: rgb(52 211 153 / 0.28);
+
+    --df-dark-secondary: #818cf8;
+    --df-dark-secondary-soft: #1b2145;
+    --df-dark-secondary-soft-fg: #a5b4fc;
+
+    --df-dark-role-fe-bg: #1e2350;
+    --df-dark-role-fe-fg: #a5b4fc;
+    --df-dark-role-be-bg: #2a1b43;
+    --df-dark-role-be-fg: #d8b4fe;
+    --df-dark-role-fs-bg: #0f2a21;
+    --df-dark-role-fs-fg: #6ee7b7;
+
+    --df-dark-ok-bg: #0f2a21;
+    --df-dark-ok-fg: #6ee7b7;
+    --df-dark-ok-line: rgb(52 211 153 / 0.28);
+    --df-dark-warn-bg: #2e2211;
+    --df-dark-warn-fg: #fcd34d;
+    --df-dark-warn-line: rgb(245 158 11 / 0.3);
+    --df-dark-danger-bg: #331519;
+    --df-dark-danger-fg: #fca5a5;
+    --df-dark-danger-line: rgb(248 113 113 / 0.3);
+
+    --df-dark-shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.5);
+    --df-dark-shadow-card-hover:
+      0 12px 30px -10px rgb(0 0 0 / 0.7), 0 3px 10px -4px rgb(0 0 0 / 0.5);
+    --df-dark-shadow-pop: 0 30px 70px -20px rgb(0 0 0 / 0.8);
+    --df-dark-shadow-brand: 0 6px 20px -6px rgb(52 211 153 / 0.35);
+
+    --df-dark-logo-tile: #1e293b;
+    --df-dark-glow-a: rgb(16 185 129 / 0.1);
+    --df-dark-glow-b: rgb(99 102 241 / 0.12);
+    --df-dark-scroll-thumb: #33415a;
+    --df-dark-scroll-thumb-hover: #46587a;
+  }
+}
+
+/* The two activation scopes. Both just point the live tokens at the `--df-dark-*`
+   set above, so the palette itself is written exactly once. */
+html.dark {
+  color-scheme: dark;
+
+  --df-canvas: var(--df-dark-canvas);
+  --df-surface: var(--df-dark-surface);
+  --df-surface-2: var(--df-dark-surface-2);
+  --df-surface-3: var(--df-dark-surface-3);
+  --df-line: var(--df-dark-line);
+  --df-line-strong: var(--df-dark-line-strong);
+  --df-heading: var(--df-dark-heading);
+  --df-body: var(--df-dark-body);
+  --df-muted: var(--df-dark-muted);
+  --df-faint: var(--df-dark-faint);
+  --df-accent: var(--df-dark-accent);
+  --df-accent-hover: var(--df-dark-accent-hover);
+  --df-accent-contrast: var(--df-dark-accent-contrast);
+  --df-accent-soft: var(--df-dark-accent-soft);
+  --df-accent-soft-fg: var(--df-dark-accent-soft-fg);
+  --df-accent-line: var(--df-dark-accent-line);
+  --df-secondary: var(--df-dark-secondary);
+  --df-secondary-soft: var(--df-dark-secondary-soft);
+  --df-secondary-soft-fg: var(--df-dark-secondary-soft-fg);
+  --df-role-fe-bg: var(--df-dark-role-fe-bg);
+  --df-role-fe-fg: var(--df-dark-role-fe-fg);
+  --df-role-be-bg: var(--df-dark-role-be-bg);
+  --df-role-be-fg: var(--df-dark-role-be-fg);
+  --df-role-fs-bg: var(--df-dark-role-fs-bg);
+  --df-role-fs-fg: var(--df-dark-role-fs-fg);
+  --df-ok-bg: var(--df-dark-ok-bg);
+  --df-ok-fg: var(--df-dark-ok-fg);
+  --df-ok-line: var(--df-dark-ok-line);
+  --df-warn-bg: var(--df-dark-warn-bg);
+  --df-warn-fg: var(--df-dark-warn-fg);
+  --df-warn-line: var(--df-dark-warn-line);
+  --df-danger-bg: var(--df-dark-danger-bg);
+  --df-danger-fg: var(--df-dark-danger-fg);
+  --df-danger-line: var(--df-dark-danger-line);
+  --df-shadow-card: var(--df-dark-shadow-card);
+  --df-shadow-card-hover: var(--df-dark-shadow-card-hover);
+  --df-shadow-pop: var(--df-dark-shadow-pop);
+  --df-shadow-brand: var(--df-dark-shadow-brand);
+  --df-logo-tile: var(--df-dark-logo-tile);
+  --df-glow-a: var(--df-dark-glow-a);
+  --df-glow-b: var(--df-dark-glow-b);
+  --df-scroll-thumb: var(--df-dark-scroll-thumb);
+  --df-scroll-thumb-hover: var(--df-dark-scroll-thumb-hover);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.light) {
+    color-scheme: dark;
+
+    --df-canvas: var(--df-dark-canvas);
+    --df-surface: var(--df-dark-surface);
+    --df-surface-2: var(--df-dark-surface-2);
+    --df-surface-3: var(--df-dark-surface-3);
+    --df-line: var(--df-dark-line);
+    --df-line-strong: var(--df-dark-line-strong);
+    --df-heading: var(--df-dark-heading);
+    --df-body: var(--df-dark-body);
+    --df-muted: var(--df-dark-muted);
+    --df-faint: var(--df-dark-faint);
+    --df-accent: var(--df-dark-accent);
+    --df-accent-hover: var(--df-dark-accent-hover);
+    --df-accent-contrast: var(--df-dark-accent-contrast);
+    --df-accent-soft: var(--df-dark-accent-soft);
+    --df-accent-soft-fg: var(--df-dark-accent-soft-fg);
+    --df-accent-line: var(--df-dark-accent-line);
+    --df-secondary: var(--df-dark-secondary);
+    --df-secondary-soft: var(--df-dark-secondary-soft);
+    --df-secondary-soft-fg: var(--df-dark-secondary-soft-fg);
+    --df-role-fe-bg: var(--df-dark-role-fe-bg);
+    --df-role-fe-fg: var(--df-dark-role-fe-fg);
+    --df-role-be-bg: var(--df-dark-role-be-bg);
+    --df-role-be-fg: var(--df-dark-role-be-fg);
+    --df-role-fs-bg: var(--df-dark-role-fs-bg);
+    --df-role-fs-fg: var(--df-dark-role-fs-fg);
+    --df-ok-bg: var(--df-dark-ok-bg);
+    --df-ok-fg: var(--df-dark-ok-fg);
+    --df-ok-line: var(--df-dark-ok-line);
+    --df-warn-bg: var(--df-dark-warn-bg);
+    --df-warn-fg: var(--df-dark-warn-fg);
+    --df-warn-line: var(--df-dark-warn-line);
+    --df-danger-bg: var(--df-dark-danger-bg);
+    --df-danger-fg: var(--df-dark-danger-fg);
+    --df-danger-line: var(--df-dark-danger-line);
+    --df-shadow-card: var(--df-dark-shadow-card);
+    --df-shadow-card-hover: var(--df-dark-shadow-card-hover);
+    --df-shadow-pop: var(--df-dark-shadow-pop);
+    --df-shadow-brand: var(--df-dark-shadow-brand);
+    --df-logo-tile: var(--df-dark-logo-tile);
+    --df-glow-a: var(--df-dark-glow-a);
+    --df-glow-b: var(--df-dark-glow-b);
+    --df-scroll-thumb: var(--df-dark-scroll-thumb);
+    --df-scroll-thumb-hover: var(--df-dark-scroll-thumb-hover);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Base
+   ═══════════════════════════════════════════════════════════════════════════ */
 html,
 body {
   height: 100%;
 }
 
 body {
-  @apply bg-ink-50 text-ink-900 antialiased;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+  @apply bg-canvas text-body antialiased;
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
+  /* Two faint accent washes anchored off-canvas. Fixed so they stay put while
+     content scrolls, which keeps the page reading as one surface rather than a
+     scrolling gradient. */
+  background-image:
+    radial-gradient(48rem 34rem at -8% -10%, var(--df-glow-a), transparent 60%),
+    radial-gradient(55rem 38rem at 108% -12%, var(--df-glow-b), transparent 62%);
+  background-attachment: fixed;
+  /* Colour-scheme changes are worth easing; nothing else here animates. */
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+h1,
+h2,
+h3 {
+  @apply text-heading;
+  letter-spacing: -0.015em;
+}
+
+code {
+  @apply rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[0.9em] text-heading;
+}
+
+::selection {
+  background: var(--df-accent-soft);
+  color: var(--df-accent-soft-fg);
+}
+
+/**
+ * One visible focus ring for everything, in the brand accent. `:where()` keeps
+ * specificity at zero so a component-level `focus:ring-*` still wins, and
+ * `:focus-visible` means it only appears for keyboard users.
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--df-accent);
+  outline-offset: 2px;
+}
+
+/* Slim, themed scrollbars so inner scroll regions (repo picker, sidebar) don't
+   stamp heavy platform chrome into the middle of a card. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--df-scroll-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--df-scroll-thumb);
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--df-scroll-thumb-hover);
 }
