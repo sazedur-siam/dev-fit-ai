@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { analyzeRepo } from "@/lib/analyzer";
 import { resolveCredentials } from "@/lib/credentials";
 import { requireUser, statusForError } from "@/lib/session";
+import type { AppUser } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,9 +11,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  let userId: string;
+  let user: AppUser;
   try {
-    userId = (await requireUser()).id;
+    user = await requireUser();
   } catch (err) {
     const message = err instanceof Error ? err.message : "Not signed in";
     return NextResponse.json({ error: message }, { status: statusForError(err) });
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const creds = await resolveCredentials(userId);
+    const creds = await resolveCredentials(user);
     const { requirement, digestMeta } = await analyzeRepo(repoUrl, creds);
     return NextResponse.json({ requirement, digestMeta });
   } catch (err) {

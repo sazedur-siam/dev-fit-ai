@@ -1,6 +1,6 @@
 /**
- * Exactly one `admin` exists, bootstrapped from ADMIN_EMAIL/ADMIN_PASSWORD.
- * Everyone else is a `project_manager`, created by that admin.
+ * One `admin` is bootstrapped from ADMIN_EMAIL/ADMIN_PASSWORD. Everyone else is a
+ * `project_manager` — created by an admin, or self-registered.
  */
 export type Role = "admin" | "project_manager";
 
@@ -8,6 +8,24 @@ export const ROLE_LABELS: Record<Role, string> = {
   admin: "Admin",
   project_manager: "Project manager",
 };
+
+/**
+ * How an account came to exist. `"self"` and `"google"` are the self-service
+ * paths; they never fall back to the server's own API keys — see credentials.ts.
+ */
+export type AccountSource = "bootstrap" | "admin" | "self" | "google";
+
+export const SOURCE_LABELS: Record<AccountSource, string> = {
+  bootstrap: "Bootstrapped",
+  admin: "Added by admin",
+  self: "Self-registered",
+  google: "Google",
+};
+
+/** Self-service accounts, which must bring their own API keys. */
+export function isSelfService(source: AccountSource): boolean {
+  return source === "self" || source === "google";
+}
 
 /** Where each role lands after signing in. */
 export const ROLE_HOME: Record<Role, string> = {
@@ -57,6 +75,11 @@ export interface AppUser {
   email: string;
   name: string | null;
   role: Role;
+  source: AccountSource;
+  /** Whether email + password sign-in works for this account. */
+  hasPassword: boolean;
+  /** Whether a Google account is linked. */
+  hasGoogle: boolean;
   createdAt: string;
   lastLoginAt: string | null;
 }

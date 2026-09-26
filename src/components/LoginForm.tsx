@@ -79,7 +79,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
     "text-[10px] font-bold uppercase tracking-[0.14em] text-muted";
 
   return (
-    <form onSubmit={submit} className="mt-7 text-left">
+    <form onSubmit={submit} className="text-left">
       {error && (
         <div
           role="alert"

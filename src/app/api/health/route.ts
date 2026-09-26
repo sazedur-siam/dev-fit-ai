@@ -108,6 +108,7 @@ export async function GET() {
     ENCRYPTION_KEY_is32Bytes: encryptionKeyValid(),
     ADMIN_EMAIL: present("ADMIN_EMAIL"),
     ADMIN_PASSWORD: present("ADMIN_PASSWORD"),
+    GOOGLE_SIGN_IN: present("GOOGLE_CLIENT_ID") && present("GOOGLE_CLIENT_SECRET"),
     GEMINI_MODEL: process.env.GEMINI_MODEL?.trim() || "(default)",
   };
 

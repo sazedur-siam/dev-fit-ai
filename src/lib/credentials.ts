@@ -1,4 +1,5 @@
 import { readUserKey } from "@/lib/db/keys";
+import { isSelfService, type AppUser } from "@/lib/types";
 
 export type CredentialSource = "user" | "env" | "none";
 
@@ -18,20 +19,23 @@ export interface ResolvedCredentials {
  * `*Source` fields let the UI say which one was used, so a surprising result is
  * traceable to the credential behind it.
  *
+ * Self-registered and Google accounts never get the fallback. Anyone can create
+ * one, so letting them use the server's keys would hand those keys (and their
+ * bill) to the public. They must save their own.
+ *
  * Decrypted values must not leave the server.
  */
 export async function resolveCredentials(
-  userId: string | null
+  user: Pick<AppUser, "id" | "source">
 ): Promise<ResolvedCredentials> {
-  const [userGemini, userGithub] = userId
-    ? await Promise.all([
-        readUserKey(userId, "gemini"),
-        readUserKey(userId, "github"),
-      ])
-    : [null, null];
+  const [userGemini, userGithub] = await Promise.all([
+    readUserKey(user.id, "gemini"),
+    readUserKey(user.id, "github"),
+  ]);
 
-  const envGemini = process.env.GEMINI_API_KEY?.trim() || null;
-  const envGithub = process.env.GITHUB_TOKEN?.trim() || null;
+  const allowEnv = !isSelfService(user.source);
+  const envGemini = (allowEnv && process.env.GEMINI_API_KEY?.trim()) || null;
+  const envGithub = (allowEnv && process.env.GITHUB_TOKEN?.trim()) || null;
 
   const geminiApiKey = userGemini || envGemini;
   const githubToken = userGithub || envGithub;

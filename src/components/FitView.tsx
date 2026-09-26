@@ -22,7 +22,14 @@ function isValidRepoUrl(input: string): boolean {
   );
 }
 
-export function FitView({ hasGeminiKey }: { hasGeminiKey: boolean }) {
+export function FitView({
+  hasGeminiKey,
+  serverKeyAllowed,
+}: {
+  hasGeminiKey: boolean;
+  /** False for self-registered accounts, which never use the server's key. */
+  serverKeyAllowed: boolean;
+}) {
   const [repoUrl, setRepoUrl] = useState("");
   const [state, setState] = useState<
     | { kind: "idle" }
@@ -102,8 +109,15 @@ export function FitView({ hasGeminiKey }: { hasGeminiKey: boolean }) {
                 className="font-semibold text-accent-soft-fg underline underline-offset-2 hover:text-accent"
               >
                 Add yours in Settings
-              </Link>{" "}
-              — or set <code>GEMINI_API_KEY</code> on the server.
+              </Link>
+              {serverKeyAllowed ? (
+                <>
+                  {" "}
+                  — or set <code>GEMINI_API_KEY</code> on the server.
+                </>
+              ) : (
+                "."
+              )}
             </p>
           </div>
         </div>

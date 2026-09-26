@@ -24,7 +24,14 @@ const META: Record<
   },
 };
 
-export function KeyManager({ initial }: { initial: KeyStatus[] }) {
+export function KeyManager({
+  initial,
+  serverKeyAllowed,
+}: {
+  initial: KeyStatus[];
+  /** False for self-registered accounts, which never use the server's keys. */
+  serverKeyAllowed: boolean;
+}) {
   const router = useRouter();
   const [statuses, setStatuses] = useState<KeyStatus[]>(initial);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -185,8 +192,10 @@ export function KeyManager({ initial }: { initial: KeyStatus[] }) {
       <p className="text-xs leading-relaxed text-muted">
         Keys are encrypted with AES-256-GCM before they are written to the
         database, and are never sent back to the browser — only the masked preview
-        above. Deleting one removes it immediately; the app then falls back to a
-        server-configured key if the deployment has one.
+        above. Deleting one removes it immediately
+        {serverKeyAllowed
+          ? "; the app then falls back to a server-configured key if the deployment has one."
+          : ", and analysis stops working until you add another."}
       </p>
     </div>
   );

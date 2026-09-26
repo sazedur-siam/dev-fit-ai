@@ -30,9 +30,9 @@ export async function GET() {
 }
 
 /**
- * Create an account. Admin-only — there is no self-registration anywhere in the
- * app, so this is the only path by which a user comes into existence besides the
- * bootstrapped admin.
+ * Create an account on someone's behalf. Admin-only, and the only path that can
+ * create another admin — public registration (/api/register) and Google sign-in
+ * only ever make project managers.
  */
 export async function POST(req: Request) {
   try {

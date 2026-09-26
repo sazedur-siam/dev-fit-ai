@@ -1,24 +1,45 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { isAdminConfigured, isAuthConfigured } from "@/lib/auth";
+import { isAdminConfigured, isAuthConfigured, isGoogleConfigured } from "@/lib/auth";
 import { readSessionSafe } from "@/lib/session";
 import { LoginForm } from "@/components/LoginForm";
+import { AuthDivider, GoogleSignInButton } from "@/components/AuthButtons";
 import { LogoMark } from "@/components/Logo";
 import { ROLE_HOME } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * NextAuth sends failed sign-ins here as `?error=<code>`. Only OAuth failures
+ * arrive this way — the password form reports its own errors inline.
+ */
+function errorMessage(code: string | undefined): string | null {
+  if (!code) return null;
+  if (code === "AccessDenied") {
+    return "Google sign-in was refused. The Google account needs a verified email, and that email can't already be linked to a different Google account.";
+  }
+  if (code === "Configuration") {
+    return "The server isn't configured for sign-in yet — check /api/health.";
+  }
+  return "Sign-in with Google didn't complete. Please try again.";
+}
+
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ callbackUrl?: string }>;
+  searchParams: Promise<{ callbackUrl?: string; error?: string }>;
 }) {
   const session = await readSessionSafe();
-  if (session?.user) {
+  // `id` too: a token without one can't resolve to a user, and redirecting it
+  // onward would bounce straight back here.
+  if (session?.user?.id) {
     redirect(ROLE_HOME[session.user.role] ?? "/fit");
   }
 
-  const { callbackUrl } = await searchParams;
+  const { callbackUrl: rawCallback, error } = await searchParams;
+  const callbackUrl = rawCallback && rawCallback.startsWith("/") ? rawCallback : undefined;
   const configured = isAuthConfigured();
+  const oauthError = errorMessage(error);
 
   return (
     <div className="mx-auto max-w-md py-6">
@@ -28,16 +49,29 @@ export default async function LoginPage({
           Sign in to Dev<span className="text-accent">Fit</span>
         </h1>
         <p className="mt-2 text-sm text-body">
-          Enter the email and password you were given.
+          Sign in with your email and password
+          {isGoogleConfigured() ? " or your Google account" : ""}.
         </p>
 
         {configured ? (
           <>
-            <LoginForm
-              callbackUrl={
-                callbackUrl && callbackUrl.startsWith("/") ? callbackUrl : undefined
-              }
-            />
+            <div className="mt-7">
+              {oauthError && (
+                <div
+                  role="alert"
+                  className="mb-4 rounded-xl border border-danger-line bg-danger-bg p-3.5 text-left text-sm font-medium text-danger-fg"
+                >
+                  {oauthError}
+                </div>
+              )}
+              {isGoogleConfigured() && (
+                <>
+                  <GoogleSignInButton callbackUrl={callbackUrl} />
+                  <AuthDivider />
+                </>
+              )}
+              <LoginForm callbackUrl={callbackUrl} />
+            </div>
             {!isAdminConfigured() && (
               <div className="mt-5 rounded-xl border border-warn-line bg-warn-bg p-3.5 text-left text-xs">
                 <div className="font-bold text-warn-fg">
@@ -64,9 +98,14 @@ export default async function LoginPage({
         )}
       </div>
 
-      <p className="mt-5 text-center text-xs text-muted">
-        Accounts are created by an administrator — there is no self-registration.
-      </p>
+      {configured && (
+        <p className="mt-5 text-center text-sm text-body">
+          New to DevFit?{" "}
+          <Link href="/register" className="font-bold text-accent hover:underline">
+            Create an account
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

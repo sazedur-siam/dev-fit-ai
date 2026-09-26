@@ -7,9 +7,10 @@ digest of the repo, asks Gemini what kind of developer it needs, scores 10 seede
 developers against that requirement with **deterministic** sub-scores, and returns
 a ranked fit list with plain-language explanations.
 
-Sign-in is **email + password** (NextAuth v4 Credentials). **Every page is behind
-the login** — there are no public routes but `/login`. Exactly one `admin` exists,
-bootstrapped from env; everyone else is a `project_manager` created by that admin.
+Sign-in is **email + password** (NextAuth v4 Credentials) plus optional **Google**.
+**Every page is behind the login** — the only public routes are `/login` and
+`/register`. One `admin` is bootstrapped from env; everyone else is a
+`project_manager`, self-registered or created by the admin.
 Users store their **own** Gemini/GitHub credentials, encrypted at rest. MongoDB
 holds users, encrypted keys, the developer cohort and per-user analysis history.
 
@@ -67,7 +68,7 @@ orchestrator and the only place that composes all of the above.
 | Path | Role |
 | --- | --- |
 | [src/lib/types.ts](src/lib/types.ts) | All shared types. Start here. |
-| [src/lib/auth.ts](src/lib/auth.ts) | NextAuth options: GitHub provider, JWT callbacks. |
+| [src/lib/auth.ts](src/lib/auth.ts) | NextAuth options: Credentials + optional Google provider, JWT callbacks. |
 | [src/lib/session.ts](src/lib/session.ts) | `requireUser` / `requireAdmin` — the authorization boundary. |
 | [src/lib/crypto.ts](src/lib/crypto.ts) | AES-256-GCM seal/open + masking for stored keys. |
 | [src/lib/credentials.ts](src/lib/credentials.ts) | Resolves which key a request uses (user → env). |
@@ -124,8 +125,9 @@ that look like bugs but are deliberate, and one that is a genuine wart:
 | `NEXTAUTH_URL` | In production | e.g. `https://your-host`. Optional locally. |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | **Yes** for sign-in | Bootstraps the single admin. Created by `npm run seed`, and self-healed on that email's first login attempt if seed wasn't run. **Only ever creates** — it will not overwrite a password the admin later changed, so editing these does not reset an existing account (use the dashboard's *Reset password*). |
 | `ADMIN_NAME` | No | Display name for the bootstrapped admin. |
-| `GEMINI_API_KEY` | No | Fallback when a user hasn't saved their own. |
-| `GITHUB_TOKEN` | No | Same, for GitHub. Unauthenticated GitHub is 60 req/hr; one digest costs 3 REST calls. |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | No | Enables "Continue with Google". The provider isn't registered and the button is hidden when unset. Redirect URI: `<NEXTAUTH_URL>/api/auth/callback/google`. |
+| `GEMINI_API_KEY` | No | Fallback when a user hasn't saved their own. **Admin-created accounts only** — self-registered and Google accounts never get it. |
+| `GITHUB_TOKEN` | No | Same, for GitHub (same restriction). Unauthenticated GitHub is 60 req/hr; one digest costs 3 REST calls. |
 | `GEMINI_MODEL` | No | Defaults to `gemini-3.6-flash`. |
 
 Never `throw` at module scope for a missing env var. `auth.ts` originally did, which
@@ -142,7 +144,8 @@ which `geminiText()` throws on. Always probe a candidate with a real
 
 ## Auth and the key vault
 
-**Every route requires a session.** `/login` is the only unauthenticated page —
+**Every route requires a session.** `/login` and `/register` are the only
+unauthenticated pages —
 `/` and `/developer/[id]` were public before roles existed and are not any more.
 New pages must guard themselves; see the pattern below.
 
@@ -165,18 +168,46 @@ New pages must guard themselves; see the pattern below.
    returns `null` for both an unknown email and a wrong password, and runs a dummy
    bcrypt compare on the unknown-email path so response timing doesn't leak it
    either. The form shows one message: "Incorrect email or password." Keep it that
-   way — don't add "no such user" for friendliness.
+   way — don't add "no such user" for friendliness. A Google-only account
+   (`passwordHash: null`) takes the same dummy-compare path. *Registration* does
+   return 409 for a taken email — unavoidable without confirmation email.
 
 Credential resolution is user-key → env-key → none
 ([src/lib/credentials.ts](src/lib/credentials.ts)). The env fallback keeps a
 single-operator deployment working; `credentialSources` on the `/api/fit` response
-reports which one was actually used.
+reports which one was actually used. **Self-service accounts (`source` `"self"` or
+`"google"`) never get the env fallback** — anyone can create one, so allowing it
+would give the server's keys to the public. `resolveCredentials()` takes the user,
+not just an id, for this reason; don't loosen it.
 
 ### Roles and account creation
 
-There is **no self-registration**. Accounts come into existence two ways only:
-the env-bootstrapped admin, and `POST /api/admin/users` (admin-only). If you add a
-signup route you have changed the security model — don't do it incidentally.
+Accounts come into existence four ways, recorded as `source` on the user document
+(`AccountSource` in [types.ts](src/lib/types.ts)):
+
+| `source` | How | Role |
+| --- | --- | --- |
+| `bootstrap` | `ADMIN_EMAIL` / `ADMIN_PASSWORD` via seed or first login | admin |
+| `admin` | `POST /api/admin/users` (admin-only). Also the default for legacy docs with no `source`. | either |
+| `self` | `POST /api/register` — public | always `project_manager` |
+| `google` | First Google sign-in with a new email | always `project_manager` |
+
+Public paths **must never create an admin** — `createUser()` forces
+`project_manager` when `source` is `"self"`, and the body's `role` is ignored.
+
+**Google linking** lives in `signInWithGoogle()` ([db/users.ts](src/lib/db/users.ts)),
+called from the `signIn` callback; the `jwt` callback then maps Google's id to ours
+via `getUserByGoogleId()` (on a Google sign-in `user.id` is *Google's* id, not
+ours). Rules, all deliberate:
+
+- Only `email_verified` Google profiles are admitted, because linking is by email.
+- An email already tied to a *different* `googleId` is refused (→ `/login?error=AccessDenied`).
+- Linking a `self` account that isn't `emailVerified` **sets its `passwordHash` to
+  `null`**. There's no confirmation email, so anyone can pre-register someone
+  else's address; without this, the squatter's password would keep working after
+  the real owner signs in with Google. Admin-created accounts keep their password.
+- There is no NextAuth adapter (see below), so no `accounts` collection — the link
+  is `googleId` on the user document.
 
 The API refuses to demote or delete the last admin, and refuses self-demotion and
 self-deletion, so the dashboard cannot be locked out. `ROLE_HOME` in
@@ -199,8 +230,9 @@ token's scope, not a bug.
 
 Two independent reasons, so don't "upgrade" this:
 
-- The **Credentials provider only supports JWT sessions**. There is no OAuth
-  account record to hang a database session off.
+- The **Credentials provider only supports JWT sessions**, and password sign-in
+  has no OAuth account record to hang a database session off. Google shares the
+  same JWT strategy.
 - `@next-auth/mongodb-adapter@1.1.3` peers on `mongodb: ^4 || ^5`, two majors below
   the `mongodb@7` driver here, so the adapter can't be installed anyway.
 
@@ -366,7 +398,7 @@ stylesheet may not have loaded by the time it renders.
 - Server-first. Every `page.tsx` is a **server** component; interactivity lives in
   `src/components/*` client components: `AppShell`, `ThemeToggle`, `FitView`,
   `DeveloperBrowser`, `RepoPicker`, `KeyManager`, `AdminUserTable`, `LoginForm`,
-  `AuthButtons`. Pages fetch and guard, clients render and mutate — `/fit`
+  `RegisterForm`, `AuthButtons`. Pages fetch and guard, clients render and mutate — `/fit`
   follows this too (the form is `FitView`). `Logo`, `ArchetypeBadge`,
   `VerdictBadge`, `SubScoreBar`, `DeveloperCard` and `FullScreenLoader` are
   server components; keep them that way (`Logo` avoids `useId()` for exactly

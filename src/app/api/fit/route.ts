@@ -4,6 +4,7 @@ import { getAllDevelopers } from "@/lib/db/developers";
 import { saveAnalysis } from "@/lib/db/analyses";
 import { resolveCredentials } from "@/lib/credentials";
 import { requireUser, statusForError } from "@/lib/session";
+import type { AppUser } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,9 +18,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  let userId: string;
+  let user: AppUser;
   try {
-    userId = (await requireUser()).id;
+    user = await requireUser();
   } catch (err) {
     const message = err instanceof Error ? err.message : "Not signed in";
     return NextResponse.json({ error: message }, { status: statusForError(err) });
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const creds = await resolveCredentials(userId);
+    const creds = await resolveCredentials(user);
     const cohort = await getAllDevelopers();
     if (cohort.length === 0) {
       return NextResponse.json(
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
     // not discard a ranking the user already waited 30s for.
     let analysisId: string | null = null;
     try {
-      analysisId = await saveAnalysis(userId, {
+      analysisId = await saveAnalysis(user.id, {
         repoUrl,
         owner: result.digestMeta.owner,
         repo: result.digestMeta.repo,

@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/session";
 import { getKeyStatuses } from "@/lib/db/keys";
 import { countUserAnalyses } from "@/lib/db/analyses";
 import { KeyManager } from "@/components/KeyManager";
-import { ROLE_LABELS } from "@/lib/types";
+import { ROLE_LABELS, isSelfService } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +56,7 @@ export default async function SettingsPage() {
         not a shared one.
       </p>
 
-      <KeyManager initial={keys} />
+      <KeyManager initial={keys} serverKeyAllowed={!isSelfService(user.source)} />
     </div>
   );
 }

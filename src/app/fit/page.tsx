@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { resolveCredentials } from "@/lib/credentials";
 import { FitView } from "@/components/FitView";
+import { isSelfService } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,12 @@ export default async function FitPage() {
 
   // Only whether a key is resolvable — never the value — so the form can warn
   // before the user waits 30s for a failure.
-  const creds = await resolveCredentials(user.id);
+  const creds = await resolveCredentials(user);
 
-  return <FitView hasGeminiKey={creds.geminiSource !== "none"} />;
+  return (
+    <FitView
+      hasGeminiKey={creds.geminiSource !== "none"}
+      serverKeyAllowed={!isSelfService(user.source)}
+    />
+  );
 }

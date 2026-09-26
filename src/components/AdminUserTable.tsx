@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ROLE_LABELS, type AppUser, type Role } from "@/lib/types";
+import { ROLE_LABELS, SOURCE_LABELS, type AppUser, type Role } from "@/lib/types";
 
 export interface AdminUserRow extends AppUser {
   hasGeminiKey: boolean;
@@ -302,6 +302,10 @@ export function AdminUserTable({
                     {user.name && (
                       <div className="text-xs text-muted">{user.email}</div>
                     )}
+                    <div className="mt-0.5 text-[11px] text-muted">
+                      {SOURCE_LABELS[user.source]}
+                      {user.hasGoogle && user.source !== "google" && " · Google linked"}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <span

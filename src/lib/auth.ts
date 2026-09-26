@@ -1,6 +1,7 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { verifyCredentials } from "@/lib/db/users";
+import GoogleProvider, { type GoogleProfile } from "next-auth/providers/google";
+import { getUserByGoogleId, signInWithGoogle, verifyCredentials } from "@/lib/db/users";
 
 /**
  * Whether sign-in can work at all. Checked at request time, never at import time:
@@ -17,8 +18,24 @@ export function isAdminConfigured(): boolean {
   return Boolean(process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD);
 }
 
+/**
+ * Whether "Continue with Google" is offered. Optional: without the two env vars
+ * the provider is simply not registered and the button is hidden.
+ */
+export function isGoogleConfigured(): boolean {
+  return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
+    ...(isGoogleConfigured()
+      ? [
+          GoogleProvider({
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+          }),
+        ]
+      : []),
     CredentialsProvider({
       name: "Email and password",
       credentials: {
@@ -41,20 +58,50 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
 
-  // The Credentials provider only supports JWT sessions — there is no database
-  // session to look up, because no OAuth account record is created.
+  // The Credentials provider only supports JWT sessions. Google sign-ins use the
+  // same JWT: with no adapter, NextAuth stores no account record of its own —
+  // signInWithGoogle() keeps the link on our user document instead.
   session: { strategy: "jwt" },
 
-  pages: { signIn: "/login" },
+  // Errors (a refused Google sign-in, a cancelled consent screen) come back to the
+  // login page as ?error=… instead of NextAuth's unstyled default page.
+  pages: { signIn: "/login", error: "/login" },
 
   callbacks: {
+    /**
+     * Google sign-ins are admitted only with a verified email, because accounts
+     * are linked by email. This is also where the Google identity becomes one of
+     * our users — created on first sign-in, linked to an existing account after.
+     */
+    async signIn({ account, profile }) {
+      if (account?.provider !== "google") return true;
+      const google = profile as GoogleProfile | undefined;
+      if (!google?.email || google.email_verified !== true || !account.providerAccountId) {
+        return false;
+      }
+      const user = await signInWithGoogle({
+        email: google.email,
+        googleId: account.providerAccountId,
+        name: google.name,
+      });
+      return Boolean(user);
+    },
+
     /**
      * `user` is only present on the initial sign-in, which is when `authorize`
      * just read the database. Later requests pass the token through untouched, so
      * a normal page load costs no query.
      */
-    async jwt({ token, user }) {
-      if (user) {
+    async jwt({ token, user, account }) {
+      if (account?.provider === "google") {
+        // Here `user` is Google's profile, whose id is Google's — not ours. Map it
+        // to the account signIn() just linked.
+        const appUser = await getUserByGoogleId(account.providerAccountId);
+        if (appUser) {
+          token.uid = appUser.id;
+          token.role = appUser.role;
+        }
+      } else if (user) {
         token.uid = user.id;
         token.role = (user as { role?: "admin" | "project_manager" }).role;
       }

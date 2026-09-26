@@ -9,13 +9,27 @@ The core idea: **the maths decides, the AI only narrates.** Ranking happens in
 pure TypeScript before the model is ever asked to write an explanation, so any
 result can be recomputed and audited by hand.
 
+### Try it with the demo account
+
+Seed a local database with the `DEMO_*` vars set (see [Demo account](#demo-account)),
+then sign in at `/login` as a project manager:
+
+| Email | Password |
+| --- | --- |
+| `demo@devfit.local` | `devfit-demo` |
+
+For local testing only. Don't set `DEMO_*` on a deployed instance. There, people
+can [register](#accounts-login-register) their own account instead.
+
 ---
 
 ## Contents
 
+- [Try it with the demo account](#try-it-with-the-demo-account)
 - [Features](#features)
 - [Stack](#stack)
 - [Setup](#setup)
+  - [Demo account](#demo-account)
 - [Authentication & roles](#authentication--roles)
 - [How API keys are stored](#how-api-keys-are-stored)
 - [Data model](#data-model)
@@ -32,15 +46,20 @@ result can be recomputed and audited by hand.
 
 ## Features
 
-### Accounts (`/login`)
-- **Email + password** sign-in (NextAuth v4 Credentials, bcrypt cost 12).
-- **Every page sits behind the login** — `/login` is the only route reachable while
-  signed out. Each role lands on its own page: admin → `/admin`, project manager →
-  `/fit`.
-- Two roles: exactly one **Admin** (bootstrapped from `ADMIN_EMAIL` /
-  `ADMIN_PASSWORD`) and any number of **Project managers**, created by that admin.
-- **No self-registration.** Accounts exist only via the env-bootstrapped admin or
-  the admin dashboard.
+### Accounts (`/login`, `/register`)
+- **Email + password** sign-in (NextAuth v4 Credentials, bcrypt cost 12), plus
+  optional **Continue with Google** when `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
+  are set.
+- **Self-registration** at `/register`: email, password, confirm password — or sign
+  up with Google. New accounts are always project managers.
+- **Every page sits behind the login** — `/login` and `/register` are the only routes
+  reachable while signed out. Each role lands on its own page: admin → `/admin`,
+  project manager → `/fit`.
+- Two roles: one **Admin** (bootstrapped from `ADMIN_EMAIL` / `ADMIN_PASSWORD`) and
+  any number of **Project managers** — self-registered or created by the admin.
+- **Self-registered accounts bring their own keys.** They never fall back to the
+  server's `GEMINI_API_KEY` / `GITHUB_TOKEN`, so opening registration doesn't hand
+  your keys to the public.
 
 ### Navigation
 - **Collapsible sidebar** instead of a top nav — icon + label when expanded,
@@ -116,7 +135,7 @@ result can be recomputed and audited by hand.
 | Language | TypeScript (strict) |
 | AI | Google Gemini via REST (`gemini-3.6-flash` by default) |
 | Repo data | GitHub REST API + `raw.githubusercontent.com` |
-| Auth | NextAuth v4 — email + password (Credentials), JWT sessions, bcrypt |
+| Auth | NextAuth v4 — email + password (Credentials) + optional Google, JWT sessions, bcrypt |
 | Database | MongoDB (official `mongodb` driver v7) |
 | Secrets at rest | AES-256-GCM via Node `crypto` |
 
@@ -181,7 +200,12 @@ ADMIN_NAME=Your Name
 DEMO_EMAIL=demo@devfit.local
 DEMO_PASSWORD=devfit-demo
 
+# Optional "Continue with Google" — see "Google sign-in". Hidden when unset.
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
 # Optional server-wide fallbacks, used when a user hasn't saved their own.
+# Admin-created accounts only — self-registered and Google accounts never use them.
 GEMINI_API_KEY=
 GITHUB_TOKEN=
 GEMINI_MODEL=gemini-3.6-flash
@@ -236,10 +260,14 @@ There is no test runner configured — `build` and `typecheck` are the automated
 
 | | Admin | Project manager |
 | --- | --- | --- |
-| How the account is made | `ADMIN_EMAIL` / `ADMIN_PASSWORD` + `npm run seed` | Created by the admin in `/admin`, or the optional [demo account](#demo-account) |
+| How the account is made | `ADMIN_EMAIL` / `ADMIN_PASSWORD` + `npm run seed` | Self-registered at `/register` (password or Google), created by the admin in `/admin`, or the optional [demo account](#demo-account) |
 | Lands on after login | `/admin` | `/fit` |
 | Manage users | ✅ | ❌ (403) |
 | Own keys, fit runs, history | ✅ | ✅ |
+| Falls back to server API keys | ✅ | Admin-created only — never self-registered or Google |
+
+Registration can only ever create a project manager; a `role` in the request body is
+ignored. `/admin` is the only way to make another admin.
 
 Passwords are **bcrypt** hashes at cost 12 — replaceable, never readable. Sessions
 are **JWT**: the Credentials provider supports no other strategy, and
@@ -252,7 +280,39 @@ effect immediately instead of waiting for the token to expire.
 
 **Login does not reveal whether an account exists.** An unknown email and a wrong
 password produce the same message and comparable response timing, so the form can't
-be used to enumerate users.
+be used to enumerate users. A Google-only account (no password) is treated as
+unknown by the password form. *Registration* does say "an account with that email
+already exists" — a signup form can't hide that without sending confirmation email,
+which the app doesn't do.
+
+### Google sign-in
+
+Optional. Create an OAuth client in Google Cloud Console (*APIs & Services →
+Credentials → OAuth client ID → Web application*) and add this authorised redirect
+URI for each host:
+
+```
+http://localhost:3000/api/auth/callback/google
+https://your-host/api/auth/callback/google
+```
+
+Put the client ID and secret in `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, and set
+`NEXTAUTH_URL` to the public URL in production — NextAuth builds the redirect from
+it. `/api/health` reports `GOOGLE_SIGN_IN: true` once both are set.
+
+How accounts are matched:
+
+- Only Google accounts with a **verified email** are accepted.
+- First Google sign-in with a new email creates a project manager with no password.
+- If the email already has an account, Google is **linked** to it. From then on the
+  account is tied to that Google identity; a different Google account with the same
+  email is refused.
+- **Linking wipes the password of an unverified self-registered account.**
+  Registration sends no confirmation email, so anyone could register someone else's
+  address first. When the real owner proves the address through Google, the
+  squatter's password stops working. Admin-created accounts keep their password.
+- A Google-only user who wants a password can get one via *Reset password* in
+  `/admin`.
 
 There is **no `proxy.ts`** (Next 16's rename of `middleware.ts`). Each page does its
 own `getCurrentUser()` + `redirect("/login")`, which keeps the check beside what it
@@ -282,7 +342,7 @@ plaintext ──> AES-256-GCM ──> { ciphertext, iv, tag } ──> MongoDB
 
 | Collection | Holds |
 | --- | --- |
-| `users` | `email` (unique, lowercased), `passwordHash` (bcrypt), `name`, `role`, `createdAt`, `lastLoginAt` |
+| `users` | `email` (unique, lowercased), `passwordHash` (bcrypt, `null` for Google-only), `name`, `role`, `source` (`bootstrap`/`admin`/`self`/`google`), `googleId`, `emailVerified`, `createdAt`, `lastLoginAt` |
 | `userKeys` | `userId`, `kind` (`gemini`/`github`), `sealed {ciphertext, iv, tag}`, `preview`, `updatedAt` |
 | `developers` | The cohort — unique index on the business `id` |
 | `analyses` | `userId`, `repoUrl`, `owner`, `repo`, `requirement`, `ranked[]`, `topPickId`, `createdAt` |
@@ -302,14 +362,16 @@ refused them.
 │   │   ├── layout.tsx              # Shell: header, role-aware nav, footer
 │   │   ├── page.tsx                # "/" — developers list
 │   │   ├── globals.css             # Tailwind entry + @theme brand palette
-│   │   ├── login/page.tsx          # The only unauthenticated route
+│   │   ├── login/page.tsx          # Unauthenticated: sign in
+│   │   ├── register/page.tsx       # Unauthenticated: self-registration
 │   │   ├── settings/page.tsx       # Your own API keys
 │   │   ├── admin/page.tsx          # Admin-only: user management
 │   │   ├── history/page.tsx        # Your past fit runs
 │   │   ├── developer/[id]/page.tsx # Per-developer detail (async params)
 │   │   ├── fit/page.tsx            # Server guard, renders <FitView>
 │   │   └── api/
-│   │       ├── auth/[...nextauth]/ # NextAuth credentials handler
+│   │       ├── auth/[...nextauth]/ # NextAuth: credentials + Google
+│   │       ├── register/route.ts   # POST → public self-registration
 │   │       ├── analyze/route.ts    # POST → repo requirement only
 │   │       ├── developers/route.ts # GET  → cohort
 │   │       ├── fit/route.ts        # POST → ranking (+ saves history)
@@ -321,6 +383,7 @@ refused them.
 │   ├── components/
 │   │   ├── AppShell.tsx            # [client] collapsible sidebar + shell
 │   │   ├── LoginForm.tsx           # [client] email + password
+│   │   ├── RegisterForm.tsx        # [client] email + password + confirm
 │   │   ├── KeyManager.tsx          # [client] save/update/delete keys
 │   │   ├── AdminUserTable.tsx      # [client] create/reset/promote/delete
 │   │   ├── AuthButtons.tsx         # [client] sign out
@@ -396,7 +459,8 @@ capped at 15 KB so the prompt stays inside the model's context.
 ### Pages
 | Route | Description | Access |
 | --- | --- | --- |
-| `/login` | Email + password | Public (the only one) |
+| `/login` | Email + password, or Google | Public |
+| `/register` | Create an account (email + password + confirm, or Google) | Public |
 | `/` | Developers list with name + stack filters | Signed in |
 | `/developer/[id]` | Per-developer detail | Signed in |
 | `/fit` | Repo URL → requirement + ranked fit list | Signed in (+ Gemini key) |
@@ -407,6 +471,7 @@ capped at 15 KB so the prompt stays inside the model's context.
 ### Endpoints
 | Endpoint | Returns | Access |
 | --- | --- | --- |
+| `POST /api/register { email, password, confirmPassword }` | `201 { user }`; `409` if the email is taken | Public |
 | `POST /api/analyze { repoUrl }` | `{ requirement, digestMeta }` | Signed in |
 | `POST /api/fit { repoUrl }` | `{ requirement, ranked, topPickId, topPickRationale, analysisId, credentialSources }` | Signed in |
 | `GET /api/developers` | `{ developers }` | Signed in |
@@ -475,6 +540,11 @@ can be tuned without touching the engine.
   honest fix — see [Future scope](#future-scope).
 - **`experienceDepth` is cohort-relative.** Adding or removing a seeded developer
   shifts everyone else's score.
+- **No email verification or registration rate limit.** Anyone can register any
+  address, and a script could create accounts in bulk. Self-registered accounts
+  can't use the server's API keys, so the cost is database rows, not model spend.
+  Google sign-in is the only proof of email ownership (see
+  [Google sign-in](#google-sign-in)).
 - **No password recovery.** There is no reset-by-email flow — an admin resets a
   password from `/admin`. If the sole admin loses theirs, delete that user row in
   MongoDB and re-run `npm run seed` to recreate it from env.
