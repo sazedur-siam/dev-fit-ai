@@ -177,6 +177,10 @@ ADMIN_EMAIL=you@company.com
 ADMIN_PASSWORD=choose-something-strong
 ADMIN_NAME=Your Name
 
+# Optional demo project manager, created by `npm run seed` — see "Demo account".
+DEMO_EMAIL=demo@devfit.local
+DEMO_PASSWORD=devfit-demo
+
 # Optional server-wide fallbacks, used when a user hasn't saved their own.
 GEMINI_API_KEY=
 GITHUB_TOKEN=
@@ -197,12 +201,30 @@ Sign in at `/login` with `ADMIN_EMAIL` / `ADMIN_PASSWORD`, add your Gemini key a
 > never overwrites a password that has since been changed — use *Reset password* in
 > the dashboard for that.
 
+### Demo account
+
+To try the app as a **project manager** without creating one by hand, keep the two
+`DEMO_*` lines above and run `npm run seed`. Then sign in at `/login` with:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Project manager | `demo@devfit.local` | `devfit-demo` |
+
+You land on `/fit`. Save a Gemini key at `/settings`, or set `GEMINI_API_KEY` in
+`.env.local` so the demo account falls back to it.
+
+> These credentials are public, because they're printed right here. They only exist in
+> a database you seed with them, so they're fine for local testing. **Leave `DEMO_*`
+> unset on any deployed instance**: anyone who reads this README could sign in and
+> run analyses on your server-wide Gemini and GitHub keys. If a demo account already
+> exists there, delete it from `/admin`.
+
 | Script | Purpose |
 | --- | --- |
 | `npm run dev` | Dev server (Turbopack) |
 | `npm run build` | Production build; also typechecks |
 | `npm start` | Serve the production build |
-| `npm run seed` | Developer cohort + admin account in MongoDB (idempotent) |
+| `npm run seed` | Developer cohort + admin account (+ optional demo user) in MongoDB (idempotent) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | `eslint .` (flat config) |
 
@@ -214,7 +236,7 @@ There is no test runner configured — `build` and `typecheck` are the automated
 
 | | Admin | Project manager |
 | --- | --- | --- |
-| How the account is made | `ADMIN_EMAIL` / `ADMIN_PASSWORD` + `npm run seed` | Created by the admin in `/admin` |
+| How the account is made | `ADMIN_EMAIL` / `ADMIN_PASSWORD` + `npm run seed` | Created by the admin in `/admin`, or the optional [demo account](#demo-account) |
 | Lands on after login | `/admin` | `/fit` |
 | Manage users | ✅ | ❌ (403) |
 | Own keys, fit runs, history | ✅ | ✅ |

@@ -140,6 +140,41 @@ try {
       console.log(`Admin: created ${adminEmail}.`);
     }
   }
+
+  // Optional demo project manager, so someone trying the app locally can sign in
+  // without going through the admin dashboard. Opt-in: nothing is created unless
+  // both env vars are set, so a deployment never gets a guessable account by
+  // accident. Like the admin, it only ever creates.
+  const demoEmail = process.env.DEMO_EMAIL?.trim().toLowerCase();
+  const demoPassword = process.env.DEMO_PASSWORD;
+
+  if (!demoEmail || !demoPassword) {
+    console.log(
+      "Skipped demo user: set DEMO_EMAIL and DEMO_PASSWORD to create a demo project manager."
+    );
+  } else if (demoPassword.length < 8) {
+    console.log("Skipped demo user: DEMO_PASSWORD must be at least 8 characters.");
+  } else {
+    const users = db.collection("users");
+    await users.createIndex({ email: 1 }, { unique: true });
+
+    const existing = await users.findOne({ email: demoEmail });
+    if (existing) {
+      // Never demote: if this email is the admin, leave it alone.
+      console.log(`Demo user: ${demoEmail} already exists (${existing.role}) — left unchanged.`);
+    } else {
+      const { default: bcrypt } = await import("bcryptjs");
+      await users.insertOne({
+        email: demoEmail,
+        passwordHash: await bcrypt.hash(demoPassword, 12),
+        name: process.env.DEMO_NAME?.trim() || "Demo Project Manager",
+        role: "project_manager",
+        createdAt: new Date(),
+        lastLoginAt: null,
+      });
+      console.log(`Demo user: created ${demoEmail} (project manager).`);
+    }
+  }
 } catch (err) {
   console.error("Seed failed:", err instanceof Error ? err.message : err);
   process.exitCode = 1;
