@@ -23,6 +23,74 @@ interface GeminiResponse {
   promptFeedback?: { blockReason?: string };
 }
 
+/**
+ * Statuses that mean "Google is busy", not "your request is wrong". 503 is the
+ * common one — the model returns `UNAVAILABLE: high demand` during load spikes.
+ */
+const RETRYABLE_STATUSES = new Set([429, 500, 503, 504]);
+const RETRY_DELAYS_MS = [1000, 2000, 4000];
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Pull `error.message` out of Google's JSON error body instead of dumping it raw. */
+function errorDetail(body: string): string {
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: string } };
+    if (parsed.error?.message) return parsed.error.message;
+  } catch {
+    // Not JSON — fall through to the raw text.
+  }
+  return body.slice(0, 300);
+}
+
+function geminiHttpError(status: number, body: string, attempts: number) {
+  const tried = attempts > 1 ? ` (tried ${attempts} times)` : "";
+  if (status === 503 || status === 500 || status === 504) {
+    return new GeminiError(
+      `Gemini is overloaded right now${tried} — this is on Google's side, not a problem with your key or the repo. Try again in a minute, or set GEMINI_MODEL to a less busy model.`,
+      status
+    );
+  }
+  if (status === 429) {
+    return new GeminiError(
+      `Gemini rate limit or quota reached${tried}. Wait a minute and retry, or check your key's quota at https://aistudio.google.com/app/apikey`,
+      status
+    );
+  }
+  return new GeminiError(`Gemini ${status} — ${errorDetail(body)}`, status);
+}
+
+/**
+ * POST to Gemini, retrying transient failures (overload, rate limit, network)
+ * with backoff. Anything else — bad key, unknown model — fails immediately.
+ */
+async function postWithRetry(url: string, body: string): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const canRetry = attempt < RETRY_DELAYS_MS.length;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+    } catch (err) {
+      if (!canRetry) throw err;
+      await sleep(RETRY_DELAYS_MS[attempt]);
+      continue;
+    }
+
+    if (res.ok) return res;
+    const text = await res.text();
+    if (!canRetry || !RETRYABLE_STATUSES.has(res.status)) {
+      throw geminiHttpError(res.status, text, attempt + 1);
+    }
+    await sleep(RETRY_DELAYS_MS[attempt]);
+  }
+}
+
 function ensureKey(apiKey: string | null | undefined): string {
   const key = apiKey?.trim();
   if (!key) {
@@ -58,19 +126,7 @@ async function geminiText(
     },
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new GeminiError(
-      `Gemini ${res.status} ${res.statusText} — ${text.slice(0, 300)}`,
-      res.status
-    );
-  }
+  const res = await postWithRetry(url, JSON.stringify(body));
 
   const json = (await res.json()) as GeminiResponse;
   if (json.promptFeedback?.blockReason) {
