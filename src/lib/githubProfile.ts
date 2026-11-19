@@ -25,6 +25,27 @@ export const GITHUB_LOGIN = /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i;
 
 export const githubDeveloperId = (login: string) => `gh-${login.toLowerCase()}`;
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * When to re-import someone, from how recently they committed: active people
+ * change fastest. Adapted from OMAV's 7/14/30-night tiers.
+ */
+export function nextRefreshDate(lastCommitAt: string | undefined, now: Date): Date {
+  const ageDays = lastCommitAt
+    ? (now.getTime() - new Date(lastCommitAt).getTime()) / DAY_MS
+    : Infinity;
+  const intervalDays = ageDays <= 30 ? 7 : ageDays <= 180 ? 14 : 30;
+  return new Date(now.getTime() + intervalDays * DAY_MS);
+}
+
+let lastRateLimitRemaining: number | null = null;
+
+/** GraphQL points left on the token, from the most recent response's headers. */
+export function getRateLimitRemaining(): number | null {
+  return lastRateLimitRemaining;
+}
+
 // ───────────────────────── GitHub payload shapes ─────────────────────────
 
 export interface GhUser {
@@ -150,11 +171,14 @@ export function buildDeveloper(
   }));
 
   const allFrameworks = [...new Set(profileRepos.flatMap((r) => r.frameworks ?? []))];
+  const newestFirst = commits
+    .slice()
+    .sort((a, b) => b.committedDate.localeCompare(a.committedDate));
+  const now = opts.now ?? new Date();
+  const lastCommitAt = newestFirst[0]?.committedDate;
   const recentCommitMessages = [
     ...new Set(
-      commits
-        .slice()
-        .sort((a, b) => b.committedDate.localeCompare(a.committedDate))
+      newestFirst
         .map((c) => c.messageHeadline.trim())
         .filter(Boolean)
     ),
@@ -171,7 +195,9 @@ export function buildDeveloper(
     recentCommitMessages,
     source: "github",
     githubLogin: user.login,
-    importedAt: (opts.now ?? new Date()).toISOString(),
+    importedAt: now.toISOString(),
+    ...(lastCommitAt ? { lastCommitAt } : {}),
+    nextRefreshAt: nextRefreshDate(lastCommitAt, now).toISOString(),
   };
 }
 
@@ -191,6 +217,10 @@ async function graphql<T>(
     },
     body: JSON.stringify({ query, variables }),
   });
+  const remaining = Number(res.headers.get("x-ratelimit-remaining"));
+  if (Number.isFinite(remaining) && res.headers.has("x-ratelimit-remaining")) {
+    lastRateLimitRemaining = remaining;
+  }
   if (!res.ok) {
     throw new Error(`GitHub ${res.status} ${res.statusText} — GraphQL request failed`);
   }

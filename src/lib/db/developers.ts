@@ -40,6 +40,31 @@ export async function deleteDeveloper(id: string): Promise<boolean> {
   return res.deletedCount > 0;
 }
 
+/** Imported developers whose refresh date has passed (or was never set), oldest first. */
+export async function listDueForRefresh(now: Date, limit: number): Promise<MockDeveloper[]> {
+  const col = await developers();
+  return col
+    .find(
+      {
+        source: "github",
+        $or: [{ nextRefreshAt: { $lte: now.toISOString() } }, { nextRefreshAt: { $exists: false } }],
+      },
+      { projection: { _id: 0 } }
+    )
+    .sort({ nextRefreshAt: 1 })
+    .limit(limit)
+    .toArray();
+}
+
+/** Push back a developer's next refresh and note why, leaving their profile as is. */
+export async function postponeRefresh(id: string, until: Date, error: string): Promise<void> {
+  const col = await developers();
+  await col.updateOne(
+    { id },
+    { $set: { nextRefreshAt: until.toISOString(), lastRefreshError: error.slice(0, 300) } }
+  );
+}
+
 export async function countDevelopers(): Promise<number> {
   const col = await developers();
   return col.countDocuments();
