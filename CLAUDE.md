@@ -92,8 +92,10 @@ orchestrator and the only place that composes all of the above.
 | [src/lib/gemini.ts](src/lib/gemini.ts) | Raw Gemini REST client, JSON-mode + retry. |
 | [src/lib/analyzer.ts](src/lib/analyzer.ts) | Prompts + orchestration. |
 | [src/lib/developerHelpers.ts](src/lib/developerHelpers.ts) | `MockDeveloper` → `DeveloperView` (derives `languages`, `netLines`). |
-| [src/data/developers.ts](src/data/developers.ts) | 10 seeded developers: 4 frontend, 3 backend, 3 fullstack. |
-| [src/app/api/](src/app/api/) | Eight route handlers, all `runtime = "nodejs"`. |
+| [src/data/developers.ts](src/data/developers.ts) | 10 seeded sample developers: 4 frontend, 3 backend, 3 fullstack. |
+| [src/lib/githubProfile.ts](src/lib/githubProfile.ts) | Builds a developer from public GitHub activity (admin import). No Next imports. |
+| [src/lib/frameworkDetect.ts](src/lib/frameworkDetect.ts) | Dependency manifest → frameworks table (package.json, requirements, composer, …). |
+| [src/app/api/](src/app/api/) | Route handlers, all `runtime = "nodejs"`. |
 | [src/components/](src/components/) | Mostly presentational; the `"use client"` ones are listed under Conventions. |
 | [src/app/globals.css](src/app/globals.css) | The entire design system — raw ramps, semantic tokens, light/dark. See Design system. |
 | [src/app/icon.svg](src/app/icon.svg) | Favicon, via Next's file convention. Same artwork as `Logo.tsx`. |
@@ -350,6 +352,34 @@ Both unblock only when the upstream plugins ship support. Re-check with
   if you move the block into `CLAUDE.md`, `next dev` will start rewriting this file.
 - Next 16 bundles its own docs at `node_modules/next/dist/docs/` — consult those
   rather than guessing at v16 API shapes.
+
+## Real developers (GitHub import)
+
+The cohort mixes **sample** developers (`src/data/developers.ts`, `source` absent →
+`"seed"`) and **imported** ones (`source: "github"`, id `gh-<login>`). An admin
+imports someone on `/admin` → `POST /api/admin/developers { login, archetype? }`,
+which calls `fetchGithubDeveloper()` with the admin's resolved GitHub token (GraphQL
+has no anonymous tier, so a token is required). Re-importing the same login
+replaces the document; `DELETE /api/admin/developers/[id]` removes one.
+
+What's deliberate:
+
+- **Three GraphQL calls, not one.** User → repos with authored commits → manifests
+  for the top 8 repos. The combined query 502'd after ~11s on a 20-repo account.
+  Keep the repo query light (15 repos × 20 sampled commits).
+- **Commits are by author id on default branches of the user's own public,
+  non-fork repos.** Commits made under a different identity (a work email not
+  linked to the account) are invisible. That's the identity problem from
+  [docs/real-git-data-feasibility.md](docs/real-git-data-feasibility.md); the UI says
+  "public activity only".
+- **Line counts are estimates**: sampled commits' additions/deletions scaled to the
+  author's commit total per repo. Labelled as such on the developer page.
+- **Frameworks come from manifests via a fixed table** (`frameworkDetect.ts`), and the
+  archetype guess from language bytes, with TS/JS attributed by the frameworks found
+  (`guessArchetype()`). No model is involved, so imports are reproducible.
+- `buildDeveloper()` is pure and tested; `fetchGithubDeveloper()` is the network
+  half. `GITHUB_QUERIES` exposes the exact query strings so they can be run by hand
+  with `gh api graphql` when GitHub's schema is in doubt.
 
 ## Implementation notes
 

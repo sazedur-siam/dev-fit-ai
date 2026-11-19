@@ -88,6 +88,12 @@ can [register](#accounts-login-register) their own account instead.
 - The last admin cannot be demoted or deleted, and self-demotion and self-deletion
   are refused, so the dashboard can't be locked out.
 - Filter by email or name, plus roster totals.
+- **Developers panel.** Import a real developer by GitHub username (or profile
+  URL). DevFit reads their public, non-fork repositories: commits they authored,
+  languages, and frameworks from `package.json` / `requirements.txt` /
+  `composer.json` / `go.mod` / `Gemfile`. The archetype is detected automatically
+  unless you pick one. Needs a GitHub token in Settings. Re-import to refresh;
+  remove any developer, sample or real. Sample developers are badged **Sample**.
 
 ### Analysis history (`/history`)
 - Every fit run you've done, newest first, with the derived requirement and top
@@ -346,7 +352,7 @@ plaintext ──> AES-256-GCM ──> { ciphertext, iv, tag } ──> MongoDB
 | --- | --- |
 | `users` | `email` (unique, lowercased), `passwordHash` (bcrypt, `null` for Google-only), `name`, `role`, `source` (`bootstrap`/`admin`/`self`/`google`), `googleId`, `emailVerified`, `createdAt`, `lastLoginAt` |
 | `userKeys` | `userId`, `kind` (`gemini`/`github`), `sealed {ciphertext, iv, tag}`, `preview`, `updatedAt` |
-| `developers` | The cohort — unique index on the business `id` |
+| `developers` | The cohort — unique index on the business `id`. `source` is absent for samples, `"github"` for imports (with `githubLogin`, `importedAt`) |
 | `analyses` | `userId`, `repoUrl`, `owner`, `repo`, `requirement`, `ranked[]`, `topPickId`, `createdAt` |
 
 The Mongo client is cached on `globalThis` — dev-mode HMR re-evaluates modules, and
@@ -489,6 +495,8 @@ capped at 15 KB so the prompt stays inside the model's context.
 | `POST /api/admin/users` | `{ user }` — create an account | **Admin** |
 | `PATCH /api/admin/users/[id]` | `{ role }` or `{ password }` | **Admin** |
 | `DELETE /api/admin/users/[id]` | Deletes user + keys + history | **Admin** |
+| `POST /api/admin/developers { login, archetype? }` | `{ developer, result }` — import or refresh from GitHub | **Admin** |
+| `DELETE /api/admin/developers/[id]` | Removes a developer from the cohort | **Admin** |
 
 Unauthenticated requests get `401`, non-admins hitting admin routes get `403`. Bad
 JSON and a missing `repoUrl` return `400`; upstream GitHub `4xx` is surfaced as
@@ -579,20 +587,17 @@ can be tuned without touching the engine.
 ## Future scope
 
 **Scoring quality**
-- Split `stack` into its own sub-score so frameworks are matched against a
-  developer's frameworks instead of polluting the language denominator — this is
-  the highest-value fix and would make `"fit"` reachable.
 - Add recency weighting, so a language used last month outranks one last touched
   three years ago.
 - Weight repository *relevance* (domain similarity), not just raw volume.
-- Detect frameworks per developer from their repos rather than only languages.
 
 **Real data** — see
 [docs/real-git-data-feasibility.md](docs/real-git-data-feasibility.md) for the
 investigation, including what the GitHub API can and cannot supply and the four
 attribution traps that produce confident-but-wrong numbers.
 
-- Replace the seed file with real profiles built from git history. Clone the repos
+- Imported developers (admin → Developers) already come from public GitHub activity.
+  For an organisation's own repos, build profiles from git history instead: clone the repos
   and parse `git log --numstat` locally — the REST API gives per-author *volume* but
   no per-author language breakdown, and doing it via the API costs one request per
   commit.

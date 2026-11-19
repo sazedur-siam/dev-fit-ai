@@ -127,6 +127,13 @@ export interface DeveloperRepo {
   frameworks?: string[];
 }
 
+/** `seed`: invented sample data from src/data. `github`: imported from public GitHub activity. */
+export type DeveloperSource = "seed" | "github";
+
+/**
+ * A developer in the cohort. The name is historical: the type started as the
+ * seeded mock data, and imported GitHub developers use the same shape.
+ */
 export interface MockDeveloper {
   id: string;
   name: string;
@@ -136,6 +143,12 @@ export interface MockDeveloper {
   linesDeleted: number;
   repos: DeveloperRepo[];
   recentCommitMessages: string[];
+  /** Absent on seeded documents, which count as `"seed"`. */
+  source?: DeveloperSource;
+  /** GitHub username, for imported developers. */
+  githubLogin?: string;
+  /** ISO timestamp of the last import or refresh. */
+  importedAt?: string;
 }
 
 /** Developer with derived fields the UI/API want alongside the raw seed. */

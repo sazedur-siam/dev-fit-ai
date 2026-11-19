@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Archetype, DeveloperView } from "@/lib/types";
-import { ArchetypeBadge, StackTag } from "./ArchetypeBadge";
+import { ArchetypeBadge, StackTag, SourceBadge } from "./ArchetypeBadge";
 
 /** Same hue family as the role badge, so avatar and badge read as one unit. */
 const AVATAR_TONE: Record<Archetype, string> = {
@@ -42,8 +42,9 @@ export function DeveloperCard({ dev }: { dev: DeveloperView }) {
           <h3 className="truncate text-base font-bold text-heading transition group-hover:text-accent-soft-fg">
             {dev.name}
           </h3>
-          <div className="mt-1.5">
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <ArchetypeBadge archetype={dev.archetype} />
+            <SourceBadge source={dev.source ?? "seed"} />
           </div>
         </div>
 
