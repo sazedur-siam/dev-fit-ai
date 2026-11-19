@@ -62,4 +62,5 @@ export const COLLECTIONS = {
   userKeys: "userKeys",
   developers: "developers",
   analyses: "analyses",
+  rateLimits: "rateLimits",
 } as const;
