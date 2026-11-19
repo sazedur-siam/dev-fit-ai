@@ -36,9 +36,18 @@ function collection(name: string) {
           out = [...out].sort((a, b) => (a[k]! > b[k]! ? dir : a[k]! < b[k]! ? -dir : 0));
           return cursor;
         },
+        limit: (n: number) => {
+          out = out.slice(0, n);
+          return cursor;
+        },
         toArray: async () => out.map((d) => ({ ...d })),
       };
       return cursor;
+    },
+    // Projections are ignored: tests only read fields they set.
+    findOne: async (filter: Record<string, unknown>) => {
+      const doc = docs().find((d) => matches(d, filter));
+      return doc ? { ...doc } : null;
     },
     insertOne: async (doc: Record<string, unknown>) => {
       const _id = new ObjectId();
@@ -70,13 +79,14 @@ function collection(name: string) {
 }
 
 vi.mock("@/lib/mongodb", () => ({
-  COLLECTIONS: { notes: "notes", tags: "tags", shortlists: "shortlists" },
+  COLLECTIONS: { notes: "notes", tags: "tags", shortlists: "shortlists", profileReports: "profileReports" },
   getDb: async () => ({ collection }),
 }));
 
 const notes = await import("@/lib/db/notes");
 const tags = await import("@/lib/db/tags");
 const lists = await import("@/lib/db/shortlists");
+const reports = await import("@/lib/db/profileReports");
 const { NoteBodySchema, ShortlistUpdateSchema, TagBodySchema } = await import("@/lib/schemas");
 
 beforeEach(() => store.clear());
@@ -146,6 +156,58 @@ describe("shortlists are private", () => {
     expect((await lists.updateShortlist("alice", list.id, { add: "b" }))?.developerIds).toEqual(["a", "b"]);
     expect((await lists.updateShortlist("alice", list.id, { remove: "a" }))?.developerIds).toEqual(["b"]);
     expect((await lists.updateShortlist("alice", list.id, { name: "Renamed" }))?.name).toBe("Renamed");
+  });
+});
+
+describe("profile analyzer reports are private", () => {
+  const report = (login: string, name = login) => ({
+    login,
+    developer: {
+      id: `gh-${login.toLowerCase()}`,
+      name,
+      archetype: "backend" as const,
+      totalCommits: 1,
+      linesAdded: 1,
+      linesDeleted: 0,
+      repos: [],
+      recentCommitMessages: [],
+      source: "github" as const,
+      githubLogin: login,
+    },
+    insights: { login, avatarUrl: null } as never,
+    summary: null,
+    summaryError: null,
+  });
+
+  it("another user can't read, list or delete your report, even with its id", async () => {
+    const id = await reports.saveProfileReport("alice", report("octo"));
+    expect(await reports.getProfileReport("bob", id)).toBeNull();
+    expect(await reports.getProfileReportDeveloper("bob", id)).toBeNull();
+    expect(await reports.listProfileReports("bob")).toEqual([]);
+    expect(await reports.deleteProfileReport("bob", id)).toBe(false);
+    expect((await reports.getProfileReport("alice", id))?.login).toBe("octo");
+  });
+
+  it("re-analyzing the same login (any case) replaces rather than duplicates", async () => {
+    const first = await reports.saveProfileReport("alice", report("Octo", "Old name"));
+    const second = await reports.saveProfileReport("alice", report("octo", "New name"));
+    expect(second).toBe(first);
+    const list = await reports.listProfileReports("alice");
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe("New name");
+  });
+
+  it("two users analyzing the same person get separate reports", async () => {
+    const a = await reports.saveProfileReport("alice", report("octo"));
+    const b = await reports.saveProfileReport("bob", report("octo"));
+    expect(a).not.toBe(b);
+    expect(await reports.deleteProfileReport("alice", a)).toBe(true);
+    expect(await reports.getProfileReport("bob", b)).not.toBeNull();
+  });
+
+  it("a malformed id is a miss, not an error", async () => {
+    expect(await reports.getProfileReport("alice", "nope")).toBeNull();
+    expect(await reports.deleteProfileReport("alice", "nope")).toBe(false);
   });
 });
 

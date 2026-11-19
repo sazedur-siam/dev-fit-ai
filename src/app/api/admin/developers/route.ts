@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveCredentials } from "@/lib/credentials";
-import { upsertDeveloper } from "@/lib/db/developers";
+import { getDeveloperById, upsertDeveloper } from "@/lib/db/developers";
 import { toView } from "@/lib/developerHelpers";
 import { fetchGithubDeveloper } from "@/lib/githubProfile";
 import { ImportDeveloperBodySchema, parseJsonBody } from "@/lib/schemas";
@@ -55,7 +55,9 @@ export async function POST(req: Request) {
         { status: 422 }
       );
     }
-    const result = await upsertDeveloper(dev);
+    // A re-import keeps whoever first added them (possibly a PM, via Profile Analyzer).
+    const existing = await getDeveloperById(dev.id);
+    const result = await upsertDeveloper({ ...dev, addedBy: existing?.addedBy ?? admin.id });
     return NextResponse.json({ developer: toView(dev), result }, { status: result === "inserted" ? 201 : 200 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Import failed";

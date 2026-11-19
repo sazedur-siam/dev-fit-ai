@@ -23,6 +23,7 @@ export default async function AdminPage() {
     getLastRefreshRun().catch(() => null),
   ]);
   const developerCount = developers.length;
+  const userNames = new Map(users.map((u) => [u.id, u.name || u.email]));
 
   // Real developers first, newest import first; samples after, by name.
   const developerRows: AdminDeveloperRow[] = developers
@@ -35,6 +36,7 @@ export default async function AdminPage() {
       importedAt: d.importedAt ?? null,
       repoCount: d.repos.length,
       totalCommits: d.totalCommits,
+      addedBy: d.addedBy ? (userNames.get(d.addedBy) ?? "a deleted user") : null,
     }))
     .sort((a, b) =>
       a.source !== b.source

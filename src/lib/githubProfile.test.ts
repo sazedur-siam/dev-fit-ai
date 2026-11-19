@@ -6,7 +6,7 @@ import {
   guessArchetype,
   type GhRepo,
 } from "@/lib/githubProfile";
-import { ImportDeveloperBodySchema } from "@/lib/schemas";
+import { ImportDeveloperBodySchema, ProfileAnalyzeBodySchema } from "@/lib/schemas";
 
 function repo(
   name: string,
@@ -124,8 +124,17 @@ describe("GitHub usernames", () => {
     [" @octocat ", "octocat"],
     ["https://github.com/octocat", "octocat"],
     ["github.com/octocat/some-repo", "octocat"],
-  ])("import body cleans %j to %s", (input, login) => {
+    ["https://github.com/octocat?tab=repositories", "octocat"],
+    ["https://www.github.com/octocat#pinned", "octocat"],
+  ])("import and analyzer bodies clean %j to %s", (input, login) => {
     expect(ImportDeveloperBodySchema.parse({ login: input }).login).toBe(login);
+    expect(ProfileAnalyzeBodySchema.parse({ login: input }).login).toBe(login);
+  });
+
+  it("the analyzer body requires a login", () => {
+    expect(ProfileAnalyzeBodySchema.safeParse({ login: "  " }).error?.issues[0]?.message).toBe(
+      "GitHub username is required"
+    );
   });
 
   it("archetype defaults to auto and ignores junk", () => {

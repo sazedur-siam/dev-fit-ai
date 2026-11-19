@@ -2,6 +2,12 @@
 const nextConfig = {
   reactStrictMode: true,
 
+  images: {
+    // GitHub avatars on Profile Analyzer reports. No `search` key: avatar URLs
+    // carry `?u=…&v=4`, and an empty `search` would only match none.
+    remotePatterns: [{ protocol: "https", hostname: "avatars.githubusercontent.com", pathname: "/**" }],
+  },
+
   experimental: {
     /**
      * Client-side Router Cache lifetimes, in seconds.

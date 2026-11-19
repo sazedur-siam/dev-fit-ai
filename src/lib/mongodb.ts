@@ -69,4 +69,5 @@ export const COLLECTIONS = {
   notes: "notes",
   tags: "tags",
   shortlists: "shortlists",
+  profileReports: "profileReports",
 } as const;

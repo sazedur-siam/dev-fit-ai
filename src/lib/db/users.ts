@@ -362,6 +362,7 @@ export async function deleteUser(id: string): Promise<boolean> {
       COLLECTIONS.notes,
       COLLECTIONS.tags,
       COLLECTIONS.shortlists,
+      COLLECTIONS.profileReports,
     ].map((name) => db.collection(name).deleteMany({ userId: id }))
   );
   return true;
