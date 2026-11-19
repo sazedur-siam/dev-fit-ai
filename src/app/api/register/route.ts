@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createUser } from "@/lib/db/users";
 import { isAuthConfigured } from "@/lib/auth";
+import { checkRegister, clientIp } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,22 @@ export async function POST(req: Request) {
       { error: "Sign-in isn't configured on this server." },
       { status: 503 }
     );
+  }
+
+  try {
+    const { allowed, retryAfterSec } = await checkRegister(
+      clientIp((name) => req.headers.get(name))
+    );
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many accounts created from this network. Try again later." },
+        { status: 429, headers: { "Retry-After": String(retryAfterSec) } }
+      );
+    }
+  } catch (err) {
+    // Fail open: createUser below needs the same database and will report a real
+    // outage itself.
+    console.error("[register] rate limit check failed:", err);
   }
 
   let body: { email?: unknown; password?: unknown; confirmPassword?: unknown };

@@ -79,9 +79,10 @@ orchestrator and the only place that composes all of the above.
 | [src/lib/auth.ts](src/lib/auth.ts) | NextAuth options: Credentials + optional Google provider, JWT callbacks. |
 | [src/lib/session.ts](src/lib/session.ts) | `requireUser` / `requireAdmin` — the authorization boundary. |
 | [src/lib/crypto.ts](src/lib/crypto.ts) | AES-256-GCM seal/open + masking for stored keys. |
+| [src/lib/rateLimit.ts](src/lib/rateLimit.ts) | Login/register throttling policy; storage in `db/rateLimits.ts`. |
 | [src/lib/credentials.ts](src/lib/credentials.ts) | Resolves which key a request uses (user → env). |
 | [src/lib/mongodb.ts](src/lib/mongodb.ts) | Cached client + collection names. |
-| [src/lib/db/](src/lib/db/) | One module per collection: `users`, `keys`, `developers`, `analyses`. |
+| [src/lib/db/](src/lib/db/) | One module per collection: `users`, `keys`, `developers`, `analyses`, `rateLimits`. |
 | [src/lib/config.ts](src/lib/config.ts) | Weights, thresholds, digest limits, model name. Tunable during a demo. |
 | [src/lib/scoring.ts](src/lib/scoring.ts) | Pure sub-scores + ranking. No I/O, no AI. |
 | [src/lib/github.ts](src/lib/github.ts) | Repo digest builder + URL parsing. |
@@ -179,6 +180,22 @@ New pages must guard themselves; see the pattern below.
    way — don't add "no such user" for friendliness. A Google-only account
    (`passwordHash: null`) takes the same dummy-compare path. *Registration* does
    return 409 for a taken email — unavoidable without confirmation email.
+
+**Login and registration are rate-limited** ([src/lib/rateLimit.ts](src/lib/rateLimit.ts)):
+5 wrong passwords per email and 20 attempts per IP per 15 minutes; 10 registration
+attempts per IP per hour. Counters are fixed-window documents in the `rateLimits`
+collection ([db/rateLimits.ts](src/lib/db/rateLimits.ts)), updated with one atomic
+pipeline upsert and expired by a TTL index. Three things are deliberate:
+
+- **Mongo, not memory.** Serverless instances don't share memory, so an in-process
+  counter could be bypassed by spreading requests. Don't "simplify" it to a `Map`.
+- **The email is counted before the account is looked up**, so a throttled
+  unregistered email looks exactly like a throttled registered one (rule 3).
+  `authorize()` throws `TooManyAttempts`, which NextAuth hands to `LoginForm` as
+  `res.error`. A successful sign-in clears that email's counter.
+- **It fails open.** If the counter store errors, the attempt proceeds (the
+  password check needs the same DB anyway), and the driver error is logged, never
+  thrown, because anything thrown in `authorize()` reaches the client as `?error=`.
 
 Credential resolution is user-key → env-key → none
 ([src/lib/credentials.ts](src/lib/credentials.ts)). The env fallback keeps a

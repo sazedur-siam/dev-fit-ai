@@ -40,10 +40,14 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
         // an incorrect password would send someone hunting for the wrong problem,
         // so the two are distinguished — while still never revealing whether a
         // given account exists.
+        // "TooManyAttempts" is thrown by authorize() when throttled. It applies to
+        // registered and unregistered emails alike, so it leaks nothing either.
         setError(
           res.error === "Configuration"
             ? "The server isn't configured for sign-in yet — check /api/health."
-            : "Incorrect email or password."
+            : res.error === "TooManyAttempts"
+              ? "Too many sign-in attempts. Wait 15 minutes and try again."
+              : "Incorrect email or password."
         );
         return;
       }

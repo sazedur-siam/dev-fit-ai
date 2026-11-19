@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider, { type GoogleProfile } from "next-auth/providers/google";
 import { getUserByGoogleId, signInWithGoogle, verifyCredentials } from "@/lib/db/users";
+import { checkLogin, clearLogin, clientIp, TOO_MANY_ATTEMPTS } from "@/lib/rateLimit";
 
 /**
  * Whether sign-in can work at all. Checked at request time, never at import time:
@@ -42,12 +43,29 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) return null;
+
+        // Throttle before touching the password. The email is counted whether or
+        // not an account exists, so being throttled reveals nothing about it.
+        let limited = false;
+        try {
+          const headers = (req?.headers ?? {}) as Record<string, string | undefined>;
+          const ip = clientIp((name) => headers[name]);
+          limited = !(await checkLogin(credentials.email, ip)).allowed;
+        } catch (err) {
+          // If the counter store is unreachable, fail open: verifyCredentials hits
+          // the same database and will fail on its own. Never let a driver error
+          // message reach the client through NextAuth's `?error=` channel.
+          console.error("[auth] rate limit check failed:", err);
+        }
+        if (limited) throw new Error(TOO_MANY_ATTEMPTS);
+
         // Returns null for both "no such account" and "wrong password", so the
         // form cannot be used to enumerate who has an account.
         const user = await verifyCredentials(credentials.email, credentials.password);
         if (!user) return null;
+        await clearLogin(credentials.email).catch(() => {});
         return {
           id: user.id,
           email: user.email,
