@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { redirect } from "next/navigation";
-import { ArchetypeBadge, SourceBadge, StackTag } from "@/components/ArchetypeBadge";
+import {
+  AiFluencyBadge,
+  ArchetypeBadge,
+  SourceBadge,
+  StackTag,
+} from "@/components/ArchetypeBadge";
 import { getDeveloperById } from "@/lib/db/developers";
 import { getCurrentUser } from "@/lib/session";
 
@@ -89,6 +94,40 @@ export default async function DeveloperDetailPage({
           <span aria-hidden>→</span>
         </Link>
       </div>
+
+      {dev.source === "github" && (
+        <section className="mt-6 rounded-2xl border border-line bg-surface p-5 shadow-card">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-bold text-heading">AI Fluency</h2>
+            {dev.aiFluency && <AiFluencyBadge fluency={dev.aiFluency} />}
+          </div>
+          {dev.aiFluency ? (
+            <>
+              <p className="mt-1.5 text-xs leading-relaxed text-muted">
+                AI-tool config committed in {dev.aiFluency.reposWithConfig} of{" "}
+                {dev.aiFluency.reposMeasured} repositories checked. A config file shows a tool
+                was set up, not how well it&rsquo;s used, and this score is never part of a fit
+                ranking.
+              </p>
+              {dev.aiFluency.tools.length > 0 && (
+                <ul className="mt-3 space-y-1.5 text-sm">
+                  {dev.aiFluency.tools.map((t) => (
+                    <li key={t.id} className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="font-semibold text-heading">{t.label}</span>
+                      <span className="text-xs text-muted">{t.repos.join(", ")}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          ) : (
+            <p className="mt-1.5 text-xs leading-relaxed text-muted">
+              Not measured yet. Imported before AI-tool detection existed; re-import from the
+              admin page or wait for the nightly refresh.
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Stat label="Total commits" value={dev.totalCommits.toLocaleString()} />

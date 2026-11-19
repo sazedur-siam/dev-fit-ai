@@ -1,4 +1,4 @@
-import type { Archetype, DeveloperSource } from "@/lib/types";
+import type { AiFluency, Archetype, DeveloperSource } from "@/lib/types";
 
 /**
  * Role tokens: a pastel fill paired with a dark, high-contrast text tone from
@@ -46,6 +46,32 @@ export function SourceBadge({ source }: { source: DeveloperSource }) {
   ) : (
     <span className="inline-flex items-center rounded-md bg-surface-2 px-2 py-0.5 text-[11px] font-bold text-muted ring-1 ring-inset ring-line">
       Sample
+    </span>
+  );
+}
+
+const TIER_LABEL: Record<AiFluency["tier"], string> = {
+  none: "No AI tooling",
+  emerging: "AI: emerging",
+  proficient: "AI: proficient",
+  advanced: "AI: advanced",
+  elite: "AI: elite",
+};
+
+/** AI Fluency as a chip. Informational: it never affects a fit score. */
+export function AiFluencyBadge({ fluency }: { fluency: AiFluency }) {
+  const strong = fluency.tier === "advanced" || fluency.tier === "elite";
+  return (
+    <span
+      title={`AI Fluency ${fluency.score}/100. From AI-tool config files in their repos; not part of the fit score.`}
+      className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold ring-1 ring-inset ${
+        strong
+          ? "bg-accent-soft text-accent-soft-fg ring-accent-line"
+          : "bg-surface-2 text-body ring-line"
+      }`}
+    >
+      {TIER_LABEL[fluency.tier]}
+      <span className="ml-1 font-mono tabular-nums opacity-80">{Math.round(fluency.score)}</span>
     </span>
   );
 }

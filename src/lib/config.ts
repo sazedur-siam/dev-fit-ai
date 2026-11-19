@@ -47,6 +47,17 @@ export const REPO_CACHE_TTL_DAYS = 7;
  */
 export const REQUIREMENT_PROMPT_VERSION = "2";
 
+/**
+ * AI Fluency tier floors (0–100). The **only** definition: import it, never copy
+ * the numbers. OMAV's handover warns its tiers lived in three files that drifted.
+ */
+export const AI_FLUENCY_TIERS = {
+  emerging: 10,
+  proficient: 30,
+  advanced: 55,
+  elite: 80,
+} as const;
+
 export const DIGEST_LIMITS = {
   maxTreePaths: 400,
   maxInlinedFiles: 20,

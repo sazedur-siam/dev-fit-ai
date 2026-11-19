@@ -125,6 +125,22 @@ export interface DeveloperRepo {
    * Optional so developer documents seeded before frameworks existed still load.
    */
   frameworks?: string[];
+  /**
+   * AI coding tools whose config is committed here (ids from aiFluency.ts).
+   * Absent means "not checked" (samples, older imports); `[]` means "none found".
+   */
+  aiTools?: string[];
+}
+
+export type AiFluencyTier = "none" | "emerging" | "proficient" | "advanced" | "elite";
+
+/** Shown alongside a ranking, never part of it. See aiFluency.ts. */
+export interface AiFluency {
+  score: number;
+  tier: AiFluencyTier;
+  tools: { id: string; label: string; repos: string[] }[];
+  reposWithConfig: number;
+  reposMeasured: number;
 }
 
 /** `seed`: invented sample data from src/data. `github`: imported from public GitHub activity. */
@@ -161,6 +177,7 @@ export interface MockDeveloper {
 export interface DeveloperView extends MockDeveloper {
   languages: string[]; // union of repos[].languages
   frameworks: string[]; // union of repos[].frameworks
+  aiFluency: AiFluency | null; // null when not measurable (samples, older imports)
   netLines: number; // linesAdded - linesDeleted
 }
 

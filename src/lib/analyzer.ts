@@ -197,6 +197,8 @@ export async function explainRanking(
     archetype: d.archetype,
     languages: d.languages,
     frameworks: d.frameworks,
+    // Context only: AI fluency is not part of any score.
+    aiTools: d.aiFluency?.tools.map((t) => t.label) ?? null,
     totalCommits: d.totalCommits,
     netLines: d.netLines,
     recentCommitMessages: d.recentCommitMessages.slice(0, 3),

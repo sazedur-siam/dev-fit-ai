@@ -27,7 +27,7 @@ tests and CLAUDE.md then describe it, and the merged PR holds the original spec.
 | ✅ | 06 | Score frameworks separately from languages | M | 01, 05 | No |
 | ✅ | 07 | Real developers imported from GitHub | L | 05, 06 | No |
 | ✅ | 08 | Scheduled nightly refresh | M | 07 | No |
-| ⬜ | 09 | [AI Fluency score](09-ai-fluency-score.md) | M | 07 | No |
+| ✅ | 09 | AI Fluency score | M | 07 | No |
 | ⬜ | 10 | [Describe a need in plain text, with clarifying questions](10-text-need-search.md) | M | 03 | No |
 | ⬜ | 11 | [Semantic matching with embeddings](11-semantic-matching.md) | M | 06 | No, but **needs a decision first** |
 | ⬜ | 12 | [Recruiter workspace: notes, tags, shortlists](12-recruiter-workspace.md) | M | none | No |

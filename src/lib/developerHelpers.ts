@@ -1,3 +1,4 @@
+import { computeAiFluency } from "@/lib/aiFluency";
 import type { DeveloperView, MockDeveloper } from "@/lib/types";
 
 /**
@@ -30,6 +31,7 @@ export function toView(dev: MockDeveloper): DeveloperView {
     ...dev,
     languages: deriveLanguages(dev),
     frameworks: deriveFrameworks(dev),
+    aiFluency: computeAiFluency(dev),
     netLines: dev.linesAdded - dev.linesDeleted,
   };
 }

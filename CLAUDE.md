@@ -382,6 +382,24 @@ What's deliberate:
   half. `GITHUB_QUERIES` exposes the exact query strings so they can be run by hand
   with `gh api graphql` when GitHub's schema is in doubt.
 
+### AI Fluency (shown, never ranked)
+
+[src/lib/aiFluency.ts](src/lib/aiFluency.ts) scores 0–100 how much an *imported*
+developer works with AI coding tools, from config files committed to their top
+repos (`CLAUDE.md`/`.claude`, `.cursorrules`/`.cursor/rules`, `.aider.conf.yml`,
+`.windsurfrules`, `.clinerules`, `.roo`, `.github/copilot-instructions.md`,
+`AGENTS.md`). The import's manifest query probes each path for presence (~3.3s for
+8 repos). Adoption = min(50, Σ tool weight × 2.5) + 10 for 3+ tools; consistency =
+share of repos with any config × 40. Rules:
+
+- **It is not in `overall`.** It's shown on the developer page and as a chip on fit
+  results, and passed to Gemini call #2 as context. Putting it in the ranking would
+  be a scoring change: a weight, a `SCORING_VERSION` bump, and a conscious decision.
+- **Tier floors live only in `AI_FLUENCY_TIERS`** (config.ts). Import them; OMAV's
+  tiers drifted across three files.
+- `null` means *not measured*: sample developers, and imports from before detection
+  (their repos lack `aiTools`; `[]` means checked, none found). Never show those as 0.
+
 ### Nightly refresh
 
 [.github/workflows/refresh.yml](.github/workflows/refresh.yml) runs `npm run refresh`
