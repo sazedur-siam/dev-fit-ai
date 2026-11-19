@@ -1,4 +1,4 @@
-import { GEMINI_MODEL } from "@/lib/config";
+import { GEMINI_EMBEDDING_MODEL, GEMINI_MODEL } from "@/lib/config";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -175,4 +175,37 @@ IMPORTANT: Your previous response was not valid JSON. Return ONLY a single JSON 
     const second = await geminiText(retryPrompt, apiKey, { jsonMode: true });
     return JSON.parse(stripFences(second)) as T;
   }
+}
+
+/**
+ * Embed texts with Gemini, 100 per request (the batch endpoint's limit). Used
+ * only by offline tooling; never on a request path and never in a score.
+ */
+export async function geminiEmbed(
+  texts: string[],
+  apiKey: string | null | undefined,
+  model: string = GEMINI_EMBEDDING_MODEL
+): Promise<number[][]> {
+  const key = ensureKey(apiKey);
+  const url = `${GEMINI_BASE}/models/${model}:batchEmbedContents?key=${key}`;
+  const out: number[][] = [];
+  for (let i = 0; i < texts.length; i += 100) {
+    const chunk = texts.slice(i, i + 100);
+    const res = await postWithRetry(
+      url,
+      JSON.stringify({
+        requests: chunk.map((text) => ({
+          model: `models/${model}`,
+          content: { parts: [{ text }] },
+        })),
+      })
+    );
+    const json = (await res.json()) as { embeddings?: { values?: number[] }[] };
+    const vectors = (json.embeddings ?? []).map((e) => e.values ?? []);
+    if (vectors.length !== chunk.length || vectors.some((v) => v.length === 0)) {
+      throw new GeminiError(`Gemini returned ${vectors.length} embeddings for ${chunk.length} texts`);
+    }
+    out.push(...vectors);
+  }
+  return out;
 }

@@ -135,6 +135,11 @@ can [register](#accounts-login-register) their own account instead.
   languages, stack), a highlighted top pick, and the full ranking with per-developer
   sub-score bars, verdict badges and AI explanations.
 
+### Similar developers (`/developer/[id]`)
+Each profile lists the three developers with the most similar language and
+framework mix (weighted by commits), with the skills they share. Handy for finding
+a backup or a pair; it never affects a fit score.
+
 ### Describe the need (`/fit`, second tab)
 No repo yet? Describe the project or role in plain words. Gemini turns it into the
 same requirement a repo produces; if something essential is missing it asks up to
@@ -273,6 +278,7 @@ You land on `/fit`. Save a Gemini key at `/settings`, or set `GEMINI_API_KEY` in
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | `eslint .` (flat config) |
 | `npm test` | Vitest unit tests (`src/**/*.test.ts`) |
+| `npm run suggest-aliases` | Offline: propose new framework aliases for `src/lib/skills.ts` using Gemini embeddings (you review before pasting) |
 | `npm run refresh` | Re-import GitHub developers whose refresh date has passed (runs nightly in GitHub Actions) |
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests and a secret-free build on
