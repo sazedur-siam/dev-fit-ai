@@ -251,8 +251,10 @@ You land on `/fit`. Save a Gemini key at `/settings`, or set `GEMINI_API_KEY` in
 | `npm run seed` | Developer cohort + admin account (+ optional demo user) in MongoDB (idempotent) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | `eslint .` (flat config) |
+| `npm test` | Vitest unit tests (`src/**/*.test.ts`) |
 
-There is no test runner configured — `build` and `typecheck` are the automated gates.
+CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests and a secret-free build on
+every pull request.
 
 ---
 
@@ -562,7 +564,8 @@ can be tuned without touching the engine.
   those (repo meta, tree, languages). File reads hit
   `raw.githubusercontent.com`, which doesn't draw on that quota. `GITHUB_TOKEN`
   raises the cap to 5,000/hr.
-- **No tests.** No runner is configured.
+- **Unit tests only.** Vitest covers the pure modules (scoring, crypto); there are
+  no end-to-end or API tests.
 
 ---
 
@@ -610,7 +613,6 @@ attribution traps that produce confident-but-wrong numbers.
 - Cache digests and requirements per commit SHA to avoid repeat model spend.
 - Make `FitRanking` the single source of truth for the `/api/fit` contract
   (it is currently dead code that has already drifted).
-- Add a test suite around `scoring.ts` — it is pure and trivially testable.
 - Retry/backoff on Gemini `503 high demand`.
 
 ---
