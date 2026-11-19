@@ -4,7 +4,7 @@ import { COLLECTIONS, getDb } from "@/lib/mongodb";
 import type { RepoRequirement } from "@/lib/types";
 
 /**
- * Per-commit cache for public repositories: the built digest, and Gemini's
+ * Per-commit cache for public repositories: the built digest, and the AI model's
  * RepoRequirement for it. Keys always include the commit SHA, so a new push is a
  * miss rather than a stale hit. **Never call these for a private repo**: the key
  * has no user in it, so a cached private digest would be served to anyone who

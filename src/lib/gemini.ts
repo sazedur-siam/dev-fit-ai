@@ -1,8 +1,9 @@
-import { GEMINI_EMBEDDING_MODEL, GEMINI_MODEL } from "@/lib/config";
+import { GEMINI_EMBEDDING_MODEL } from "@/lib/config";
+import type { LlmModelOption } from "@/lib/providers";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
-class GeminiError extends Error {
+export class GeminiError extends Error {
   status?: number;
   constructor(message: string, status?: number) {
     super(message);
@@ -49,7 +50,7 @@ function geminiHttpError(status: number, body: string, attempts: number) {
   const tried = attempts > 1 ? ` (tried ${attempts} times)` : "";
   if (status === 503 || status === 500 || status === 504) {
     return new GeminiError(
-      `Gemini is overloaded right now${tried} — this is on Google's side, not a problem with your key or the repo. Try again in a minute, or set GEMINI_MODEL to a less busy model.`,
+      `Gemini is overloaded right now${tried} — this is on Google's side, not a problem with your key or the repo. Try again in a minute, or pick a less busy model in Settings.`,
       status
     );
   }
@@ -104,17 +105,19 @@ function ensureKey(apiKey: string | null | undefined): string {
 /**
  * Call Gemini and get the raw text back.
  *
- * The key is passed in rather than read from the environment: each signed-in user
- * stores their own credential, so there is no single ambient key to reach for.
- * Model default lives in config.ts; override with the GEMINI_MODEL env var.
+ * The key and model are passed in rather than read from the environment: each
+ * signed-in user stores their own credential and picks their own model, so there
+ * is no single ambient one to reach for. JSON parsing lives in llm.ts, shared by
+ * every provider.
  */
-async function geminiText(
+export async function geminiText(
   prompt: string,
   apiKey: string | null | undefined,
+  model: string,
   opts?: { jsonMode?: boolean }
 ) {
   const key = ensureKey(apiKey);
-  const url = `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent?key=${key}`;
+  const url = `${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
 
   const body: Record<string, unknown> = {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -143,38 +146,23 @@ async function geminiText(
 }
 
 /**
- * Strip common markdown code fences so JSON.parse doesn't choke when the model
- * wraps output in ```json ... ``` despite responseMimeType=application/json.
+ * Text models this key can call, for the model picker. Listing is not proof a
+ * model works (Google keeps retired models in this list), so the picker's Test
+ * button makes a real call.
  */
-function stripFences(text: string): string {
-  const trimmed = text.trim();
-  if (trimmed.startsWith("```")) {
-    return trimmed
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/```\s*$/i, "")
-      .trim();
-  }
-  return trimmed;
-}
-
-/**
- * Ask Gemini for JSON, parse it. Retries once with a stricter reminder on
- * parse failure — the fragile part of this app.
- */
-export async function geminiJSON<T>(
-  prompt: string,
-  apiKey: string | null | undefined
-): Promise<T> {
-  const first = await geminiText(prompt, apiKey, { jsonMode: true });
-  try {
-    return JSON.parse(stripFences(first)) as T;
-  } catch {
-    const retryPrompt = `${prompt}
-
-IMPORTANT: Your previous response was not valid JSON. Return ONLY a single JSON object with no prose, no markdown fences, no comments. Do not wrap it in \`\`\`. Just the JSON.`;
-    const second = await geminiText(retryPrompt, apiKey, { jsonMode: true });
-    return JSON.parse(stripFences(second)) as T;
-  }
+export async function listGeminiModels(apiKey: string): Promise<LlmModelOption[]> {
+  const res = await fetch(
+    `${GEMINI_BASE}/models?pageSize=1000&key=${encodeURIComponent(ensureKey(apiKey))}`
+  );
+  if (!res.ok) throw geminiHttpError(res.status, await res.text(), 1);
+  const json = (await res.json()) as {
+    models?: { name?: string; displayName?: string; supportedGenerationMethods?: string[] }[];
+  };
+  return (json.models ?? [])
+    .filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
+    .map((m) => ({ id: (m.name ?? "").replace(/^models\//, ""), label: m.displayName || "" }))
+    .filter((m) => /^gemini-/.test(m.id) && !/embedding|image|tts|audio|live/.test(m.id))
+    .map((m) => ({ id: m.id, label: m.label || m.id }));
 }
 
 /**

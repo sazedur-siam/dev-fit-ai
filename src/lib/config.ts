@@ -1,3 +1,6 @@
+import { PROVIDER_META } from "@/lib/providers";
+import type { LlmProvider } from "@/lib/types";
+
 /**
  * Tunable knobs for the fit engine. Kept here so a demo audience can point at
  * one file and see how the score is composed.
@@ -35,7 +38,7 @@ export const ARCHETYPE_MATCH_SCORES = {
 } as const;
 
 /**
- * How long a public repo's digest and Gemini requirement are reused for the same
+ * How long a public repo's digest and AI requirement are reused for the same
  * commit. The key includes the commit SHA, so a new push is never served stale;
  * this only bounds storage.
  */
@@ -65,12 +68,20 @@ export const DIGEST_LIMITS = {
 } as const;
 
 /**
+ * The model used for each AI provider when the user hasn't picked one. The
+ * built-in defaults live in providers.ts (client-safe, the picker shows them);
+ * each can be overridden per deployment with an env var.
+ *
  * `gemini-2.5-flash` was retired for new API keys ("no longer available to new
- * users", HTTP 404), so the default is a current flash model. Use
+ * users", HTTP 404), which is why Gemini's default moved. Use
  * `gemini-flash-latest` via GEMINI_MODEL if you'd rather never touch this again
  * and can tolerate the narration drifting between releases.
  */
-export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+export const DEFAULT_LLM_MODELS: Record<LlmProvider, string> = {
+  gemini: process.env.GEMINI_MODEL?.trim() || PROVIDER_META.gemini.defaultModel,
+  openai: process.env.OPENAI_MODEL?.trim() || PROVIDER_META.openai.defaultModel,
+  anthropic: process.env.ANTHROPIC_MODEL?.trim() || PROVIDER_META.anthropic.defaultModel,
+};
 
 /**
  * Embedding model for the offline alias suggester (`npm run suggest-aliases`)

@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * A fit run measured ~30s end to end: ~20 sequential GitHub file reads plus two
- * Gemini calls. Serverless platforms default well below that (Vercel Hobby is 10s),
+ * AI model calls. Serverless platforms default well below that (Vercel Hobby is 10s),
  * so without this the request is killed mid-analysis and the user sees a generic
  * 504 rather than a result. 60s is the Hobby ceiling.
  */
@@ -68,10 +68,8 @@ export async function POST(req: Request) {
       topPickRationale: result.topPickRationale,
       analysisId,
       scoringVersion: SCORING_VERSION,
-      credentialSources: {
-        gemini: creds.geminiSource,
-        github: creds.githubSource,
-      },
+      credentialSources: { llm: creds.llmSource, github: creds.githubSource },
+      llm: { provider: creds.llm.provider, model: creds.llm.model },
     };
     return NextResponse.json(response);
   } catch (err) {

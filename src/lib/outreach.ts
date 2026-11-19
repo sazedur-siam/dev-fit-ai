@@ -1,4 +1,4 @@
-import { geminiJSON } from "@/lib/gemini";
+import { llmJSON } from "@/lib/llm";
 import { canonicalSkill, expandSkills } from "@/lib/skills";
 import type { ResolvedCredentials } from "@/lib/credentials";
 import type { DeveloperView, FitScore, RepoRequirement } from "@/lib/types";
@@ -77,7 +77,7 @@ Return STRICTLY this JSON: { "subject": string, "body": string }`;
 function coerceDraft(raw: unknown, facts: ReturnType<typeof outreachFacts>) {
   const r = (raw && typeof raw === "object" ? raw : {}) as { subject?: unknown; body?: unknown };
   const body = typeof r.body === "string" ? r.body.trim() : "";
-  if (!body) throw new Error("Gemini returned an empty draft. Try again.");
+  if (!body) throw new Error("The AI model returned an empty draft. Try again.");
   const subject =
     typeof r.subject === "string" && r.subject.trim()
       ? r.subject.trim()
@@ -98,9 +98,9 @@ export async function draftOutreach(
   const facts = outreachFacts(input.dev, input.requirement);
   const ask = async (strict: boolean) =>
     coerceDraft(
-      await geminiJSON<unknown>(
+      await llmJSON<unknown>(
         buildOutreachPrompt(facts, { tone: input.tone, senderName: input.senderName, strict }),
-        creds.geminiApiKey
+        creds.llm
       ),
       facts
     );

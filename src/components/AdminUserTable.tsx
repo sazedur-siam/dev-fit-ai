@@ -2,10 +2,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ROLE_LABELS, SOURCE_LABELS, type AppUser, type Role } from "@/lib/types";
+import { PROVIDER_META } from "@/lib/providers";
+import {
+  ROLE_LABELS,
+  SOURCE_LABELS,
+  type AppUser,
+  type LlmProvider,
+  type Role,
+} from "@/lib/types";
 
 export interface AdminUserRow extends AppUser {
-  hasGeminiKey: boolean;
+  /** AI providers this user has saved a key for. Presence only, never values. */
+  aiKeyProviders: LlmProvider[];
   hasGithubKey: boolean;
 }
 
@@ -321,13 +329,20 @@ export function AdminUserTable({
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5 text-[11px]">
                       <span
+                        title={
+                          user.aiKeyProviders.length
+                            ? `AI keys saved: ${user.aiKeyProviders.map((p) => PROVIDER_META[p].label).join(", ")}`
+                            : "No AI provider key saved"
+                        }
                         className={`rounded px-1.5 py-0.5 font-semibold ${
-                          user.hasGeminiKey
+                          user.aiKeyProviders.length
                             ? "bg-ok-bg text-ok-fg"
                             : "bg-surface-2 text-muted"
                         }`}
                       >
-                        Gemini
+                        {user.aiKeyProviders.length
+                          ? user.aiKeyProviders.map((p) => PROVIDER_META[p].label).join(" · ")
+                          : "AI"}
                       </span>
                       <span
                         className={`rounded px-1.5 py-0.5 font-semibold ${

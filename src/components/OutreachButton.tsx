@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { OutreachDraft, OutreachTone } from "@/lib/outreach";
 
 /**
- * "Draft message" on a fit result: Gemini writes a first-contact email from the
+ * "Draft message" on a fit result: the AI model writes a first-contact email from the
  * facts of this match; the PM edits it, then copies it, opens it in their own
  * email client, or saves it to their private notes on the developer. DevFit
  * never sends anything itself.
@@ -117,7 +117,7 @@ export function OutreachButton({
               {busy && !draft ? "Writing…" : draft ? "Rewrite" : "Write draft"}
             </button>
             <span className="text-[11px] text-muted">
-              Drafted by Gemini from this match. You review and send it yourself.
+              Drafted by your AI model from this match. You review and send it yourself.
             </span>
           </div>
 

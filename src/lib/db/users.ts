@@ -1,7 +1,13 @@
 import { ObjectId, type WithId } from "mongodb";
 import bcrypt from "bcryptjs";
 import { COLLECTIONS, getDb } from "@/lib/mongodb";
-import type { AccountSource, AppUser, Role } from "@/lib/types";
+import {
+  isLlmProvider,
+  type AccountSource,
+  type AppUser,
+  type LlmPreference,
+  type Role,
+} from "@/lib/types";
 
 interface UserDoc {
   email: string; // stored lowercase; unique
@@ -21,6 +27,8 @@ interface UserDoc {
    * its owner signs in with Google.
    */
   emailVerified?: boolean;
+  /** AI provider + model picked in Settings. Absent until the user picks one. */
+  llm?: LlmPreference;
 }
 
 /** bcrypt work factor. 12 is ~250ms on modern hardware — deliberate. */
@@ -47,6 +55,11 @@ function toAppUser(doc: WithId<UserDoc>): AppUser {
     hasGoogle: Boolean(doc.googleId),
     createdAt: doc.createdAt.toISOString(),
     lastLoginAt: doc.lastLoginAt ? doc.lastLoginAt.toISOString() : null,
+    // A provider this build doesn't know (removed later, say) reads as unset.
+    llm:
+      doc.llm && isLlmProvider(doc.llm.provider) && typeof doc.llm.model === "string"
+        ? { provider: doc.llm.provider, model: doc.llm.model }
+        : null,
   };
 }
 
@@ -318,6 +331,20 @@ export async function setUserRole(id: string, role: Role): Promise<boolean> {
   if (!ObjectId.isValid(id)) return false;
   const col = await users();
   const res = await col.updateOne({ _id: new ObjectId(id) }, { $set: { role } });
+  return res.matchedCount === 1;
+}
+
+/** Save the user's AI provider + model choice. Validated by the caller's schema. */
+export async function setUserLlmPreference(
+  id: string,
+  pref: LlmPreference
+): Promise<boolean> {
+  if (!ObjectId.isValid(id)) return false;
+  const col = await users();
+  const res = await col.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { llm: { provider: pref.provider, model: pref.model } } }
+  );
   return res.matchedCount === 1;
 }
 

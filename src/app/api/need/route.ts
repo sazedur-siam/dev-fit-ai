@@ -11,7 +11,7 @@ import type { AppUser, NeedResponse } from "@/lib/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Two Gemini calls (parse + explain); no repo digest, so faster than /api/fit.
+// Two AI model calls (parse + explain); no repo digest, so faster than /api/fit.
 export const maxDuration = 60;
 
 /**
@@ -72,7 +72,8 @@ export async function POST(req: Request) {
       ...result,
       analysisId,
       scoringVersion: SCORING_VERSION,
-      credentialSources: { gemini: creds.geminiSource, github: creds.githubSource },
+      credentialSources: { llm: creds.llmSource, github: creds.githubSource },
+      llm: { provider: creds.llm.provider, model: creds.llm.model },
     };
     return NextResponse.json(response);
   } catch (err) {

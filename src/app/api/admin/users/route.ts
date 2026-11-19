@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createUser, listUsers } from "@/lib/db/users";
 import { getKeyPresenceByUser } from "@/lib/db/keys";
 import { requireAdmin, statusForError } from "@/lib/session";
+import { isLlmProvider } from "@/lib/types";
 import { AdminCreateUserBodySchema, parseJsonBody } from "@/lib/schemas";
 
 export const runtime = "nodejs";
@@ -19,7 +20,7 @@ export async function GET() {
       users: users.map((user) => ({
         ...user,
         // Presence only. Admins never see previews, let alone values.
-        hasGeminiKey: (presence[user.id] ?? []).includes("gemini"),
+        aiKeyProviders: (presence[user.id] ?? []).filter(isLlmProvider),
         hasGithubKey: (presence[user.id] ?? []).includes("github"),
       })),
     });
@@ -49,7 +50,7 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(
-      { user: { ...user, hasGeminiKey: false, hasGithubKey: false } },
+      { user: { ...user, aiKeyProviders: [], hasGithubKey: false } },
       { status: 201 }
     );
   } catch (err) {

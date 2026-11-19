@@ -63,8 +63,24 @@ export function parseThemePreference(value: string | undefined): ThemePreference
   return value === "light" || value === "dark" ? value : "system";
 }
 
+/** An AI model vendor a user can bring their own key for. */
+export type LlmProvider = "gemini" | "openai" | "anthropic";
+
+/** Every provider, in the order the picker shows them. */
+export const LLM_PROVIDERS: LlmProvider[] = ["gemini", "openai", "anthropic"];
+
+export function isLlmProvider(value: unknown): value is LlmProvider {
+  return typeof value === "string" && LLM_PROVIDERS.includes(value as LlmProvider);
+}
+
+/** A user's chosen AI provider and model id. Not secret: no key material. */
+export interface LlmPreference {
+  provider: LlmProvider;
+  model: string;
+}
+
 /** Which third-party credential a stored key belongs to. */
-export type KeyKind = "gemini" | "github";
+export type KeyKind = LlmProvider | "github";
 
 /**
  * A user as the app and admin dashboard see them. Never carries the password
@@ -82,6 +98,8 @@ export interface AppUser {
   hasGoogle: boolean;
   createdAt: string;
   lastLoginAt: string | null;
+  /** The AI provider and model picked in Settings; null until one is chosen. */
+  llm: LlmPreference | null;
 }
 
 /**
@@ -93,6 +111,25 @@ export interface KeyStatus {
   isSet: boolean;
   preview: string | null;
   updatedAt: string | null;
+}
+
+/**
+ * Everything the Settings page and the model picker may know about a user's AI
+ * setup. Previews only, never key values.
+ */
+export interface LlmSettings {
+  /** The provider + model requests would use right now. */
+  active: LlmPreference;
+  /** Whose key that would be: the user's own, the server's, or none (will fail). */
+  activeSource: CredentialSource;
+  /** False until the user has picked a model explicitly. */
+  chosen: boolean;
+  /** One status per AI provider, in picker order. */
+  keys: KeyStatus[];
+  /** Providers the server has a fallback key for, usable by this account. */
+  serverProviders: LlmProvider[];
+  /** The model each provider uses when none is picked (env-overridable). */
+  defaults: Record<LlmProvider, string>;
 }
 
 /** A persisted fit run, for the user's own history. */
@@ -241,7 +278,9 @@ export interface FitResponse {
   analysisId: string | null;
   /** The `SCORING_VERSION` these scores were computed with. */
   scoringVersion: string;
-  credentialSources: { gemini: CredentialSource; github: CredentialSource };
+  credentialSources: { llm: CredentialSource; github: CredentialSource };
+  /** The provider and model that wrote the requirement and explanations. */
+  llm: LlmPreference;
 }
 
 /** One repository visible to the configured GITHUB_TOKEN. */
@@ -264,8 +303,8 @@ export interface ViewerRepoList {
   repos: ViewerRepo[];
 }
 
-/** Shape the /explain Gemini call must return. */
-export interface GeminiExplanationResponse {
+/** Shape the /explain model call must return. */
+export interface ExplanationResponse {
   explanations: { devId: string; explanation: string }[];
   topPickRationale: string;
 }

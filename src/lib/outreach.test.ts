@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DeveloperView, RepoRequirement } from "@/lib/types";
 
-vi.mock("@/lib/gemini", () => ({ geminiJSON: vi.fn() }));
-const gemini = await import("@/lib/gemini");
+vi.mock("@/lib/llm", () => ({ llmJSON: vi.fn() }));
+const llm = await import("@/lib/llm");
 const { buildOutreachPrompt, draftOutreach, mentionsNumbers, outreachFacts } = await import(
   "@/lib/outreach"
 );
@@ -33,9 +33,14 @@ const requirement: RepoRequirement = {
   complexity: "high",
   summary: "An API for energy invoices.",
 };
-const creds = { geminiApiKey: "k", githubToken: null, geminiSource: "user", githubSource: "none" } as const;
+const creds = {
+  llm: { provider: "gemini", model: "gemini-test", apiKey: "k" },
+  llmSource: "user",
+  githubToken: null,
+  githubSource: "none",
+} as const;
 
-beforeEach(() => vi.mocked(gemini.geminiJSON).mockReset());
+beforeEach(() => vi.mocked(llm.llmJSON).mockReset());
 
 describe("outreachFacts", () => {
   it("keeps only skills and repos relevant to the work, via aliases and implications", () => {
@@ -84,38 +89,38 @@ describe("draftOutreach", () => {
   const input = { dev, requirement, score: { verdict: "fit" as const }, tone: "friendly" as const, senderName: "Sam" };
 
   it("returns a clean draft with no warnings", async () => {
-    vi.mocked(gemini.geminiJSON).mockResolvedValue({ subject: "Energy billing API", body: "Hi Kwame, …" });
+    vi.mocked(llm.llmJSON).mockResolvedValue({ subject: "Energy billing API", body: "Hi Kwame, …" });
     const out = await draftOutreach(input, creds);
     expect(out).toEqual({ subject: "Energy billing API", body: "Hi Kwame, …", warnings: [] });
-    expect(gemini.geminiJSON).toHaveBeenCalledOnce();
+    expect(llm.llmJSON).toHaveBeenCalledOnce();
   });
 
   it("retries once, strictly, when the first draft mentions a score", async () => {
-    vi.mocked(gemini.geminiJSON)
+    vi.mocked(llm.llmJSON)
       .mockResolvedValueOnce({ subject: "Hi", body: "You were a 92% match!" })
       .mockResolvedValueOnce({ subject: "Hi", body: "Your Django work stood out." });
     const out = await draftOutreach(input, creds);
     expect(out.body).toBe("Your Django work stood out.");
     expect(out.warnings).toEqual([]);
-    expect(vi.mocked(gemini.geminiJSON).mock.calls[1][0]).toContain("Use NO numbers");
+    expect(vi.mocked(llm.llmJSON).mock.calls[1][0]).toContain("Use NO numbers");
   });
 
   it("warns instead of hiding it when a number survives the retry", async () => {
-    vi.mocked(gemini.geminiJSON).mockResolvedValue({ subject: "Hi", body: "Rated 9/10 for this." });
+    vi.mocked(llm.llmJSON).mockResolvedValue({ subject: "Hi", body: "Rated 9/10 for this." });
     const out = await draftOutreach(input, creds);
     expect(out.warnings[0]).toMatch(/mentions a number/);
   });
 
   it("warns when reaching out to a 'not fit' developer", async () => {
-    vi.mocked(gemini.geminiJSON).mockResolvedValue({ subject: "Hi", body: "Hello Kwame." });
+    vi.mocked(llm.llmJSON).mockResolvedValue({ subject: "Hi", body: "Hello Kwame." });
     const out = await draftOutreach({ ...input, score: { verdict: "not fit" } }, creds);
     expect(out.warnings.some((w) => w.includes("not fit"))).toBe(true);
   });
 
   it("errors on an empty draft and fills a missing subject", async () => {
-    vi.mocked(gemini.geminiJSON).mockResolvedValue({ subject: "", body: "" });
+    vi.mocked(llm.llmJSON).mockResolvedValue({ subject: "", body: "" });
     await expect(draftOutreach(input, creds)).rejects.toThrow(/empty draft/);
-    vi.mocked(gemini.geminiJSON).mockResolvedValue({ body: "Hello." });
+    vi.mocked(llm.llmJSON).mockResolvedValue({ body: "Hello." });
     expect((await draftOutreach(input, creds)).subject).toBe("A energy billing project you might like");
   });
 });
