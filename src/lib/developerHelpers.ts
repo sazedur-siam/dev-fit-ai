@@ -6,11 +6,20 @@ import type { DeveloperView, MockDeveloper } from "@/lib/types";
  * don't both show up.
  */
 export function deriveLanguages(dev: MockDeveloper): string[] {
+  return unionCaseInsensitive(dev.repos.map((r) => r.languages));
+}
+
+/** Union of the frameworks across a developer's repos, deduped the same way. */
+export function deriveFrameworks(dev: MockDeveloper): string[] {
+  return unionCaseInsensitive(dev.repos.map((r) => r.frameworks ?? []));
+}
+
+function unionCaseInsensitive(lists: string[][]): string[] {
   const seen = new Map<string, string>();
-  for (const repo of dev.repos) {
-    for (const lang of repo.languages) {
-      const key = lang.trim().toLowerCase();
-      if (key && !seen.has(key)) seen.set(key, lang.trim());
+  for (const list of lists) {
+    for (const item of list) {
+      const key = item.trim().toLowerCase();
+      if (key && !seen.has(key)) seen.set(key, item.trim());
     }
   }
   return [...seen.values()];
@@ -20,6 +29,7 @@ export function toView(dev: MockDeveloper): DeveloperView {
   return {
     ...dev,
     languages: deriveLanguages(dev),
+    frameworks: deriveFrameworks(dev),
     netLines: dev.linesAdded - dev.linesDeleted,
   };
 }

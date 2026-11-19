@@ -334,7 +334,8 @@ function FitResultView({
                       {score.overall.toFixed(1)}
                     </span>
                   </div>
-                  <SubScoreBar label="Stack overlap" value={score.stackOverlap} />
+                  <SubScoreBar label="Languages" value={score.languageOverlap} />
+                  <SubScoreBar label="Frameworks" value={score.frameworkOverlap} />
                   <SubScoreBar
                     label="Archetype match"
                     value={score.archetypeMatch}

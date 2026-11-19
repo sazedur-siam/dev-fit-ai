@@ -4,9 +4,10 @@ import {
   archetypeMatch,
   computeSubScores,
   experienceDepth,
+  frameworkOverlap,
+  languageOverlap,
   overallScore,
   rankCohort,
-  stackOverlap,
   verdictFor,
 } from "@/lib/scoring";
 import type { Archetype, DeveloperView, RepoRequirement } from "@/lib/types";
@@ -25,6 +26,7 @@ function dev(
     repos: [],
     recentCommitMessages: [],
     languages: [],
+    frameworks: [],
     netLines: 1000,
     ...over,
   };
@@ -42,19 +44,83 @@ function requirement(over: Partial<RepoRequirement> = {}): RepoRequirement {
   };
 }
 
-describe("stackOverlap", () => {
-  it("is neutral (50) when the requirement names nothing", () => {
-    expect(stackOverlap(["TypeScript"], requirement())).toBe(50);
+describe("languageOverlap", () => {
+  it("is neutral (50) when the requirement names no languages", () => {
+    expect(languageOverlap(["TypeScript"], requirement())).toBe(50);
   });
 
   it("matches case-insensitively and ignores whitespace", () => {
     const req = requirement({ languages: ["typescript", " Python "] });
-    expect(stackOverlap(["TypeScript", "python"], req)).toBe(100);
+    expect(languageOverlap(["TypeScript", "python"], req)).toBe(100);
   });
 
-  it("scores the share of required terms the developer has", () => {
+  it("scores the share of required languages the developer has", () => {
     const req = requirement({ languages: ["TypeScript", "Go"] });
-    expect(stackOverlap(["TypeScript"], req)).toBe(50);
+    expect(languageOverlap(["TypeScript"], req)).toBe(50);
+  });
+
+  it("ignores the stack entirely", () => {
+    const req = requirement({ languages: ["TypeScript"], stack: ["Next.js", "Prisma"] });
+    expect(languageOverlap(["TypeScript"], req)).toBe(100);
+  });
+});
+
+describe("frameworkOverlap", () => {
+  const has = (frameworks: string[], languages: string[] = []) => ({ frameworks, languages });
+
+  it("is neutral (50) when the repo names no frameworks", () => {
+    expect(frameworkOverlap(has(["React"]), requirement())).toBe(50);
+  });
+
+  it("matches through aliases: 'Next.js App Router' = 'NextJS'", () => {
+    const req = requirement({ stack: ["Next.js App Router"] });
+    expect(frameworkOverlap(has(["NextJS"]), req)).toBe(100);
+  });
+
+  it("credits implied skills: a Next.js developer knows React", () => {
+    const req = requirement({ stack: ["React", "Next.js"] });
+    expect(frameworkOverlap(has(["Next.js"]), req)).toBe(100);
+  });
+
+  it("does not imply in reverse: a React developer isn't a Next.js developer", () => {
+    const req = requirement({ stack: ["Next.js"] });
+    expect(frameworkOverlap(has(["React"]), req)).toBe(0);
+  });
+
+  it("skips stack entries that are really languages", () => {
+    // TypeScript in the stack is already counted by languageOverlap.
+    const req = requirement({ languages: ["TypeScript"], stack: ["TypeScript", "Django"] });
+    expect(frameworkOverlap(has(["Django"]), req)).toBe(100);
+  });
+
+  it("lets a developer's languages satisfy a stack entry", () => {
+    const req = requirement({ stack: ["GraphQL"] });
+    expect(frameworkOverlap(has([], ["GraphQL"]), req)).toBe(100);
+  });
+
+  it("scores partial coverage", () => {
+    const req = requirement({ stack: ["Django", "Celery", "Redis", "Docker"] });
+    expect(frameworkOverlap(has(["Django REST Framework", "Celery"]), req)).toBe(50);
+  });
+});
+
+describe("reaching a 'fit' verdict", () => {
+  it("is possible on a framework-heavy repo (the 1.x scorer capped this near 63)", () => {
+    const nextDev = dev("fe", {
+      archetype: "frontend",
+      languages: ["TypeScript", "TSX", "CSS"],
+      frameworks: ["Next.js", "Tailwind CSS"],
+      totalCommits: 900,
+    });
+    const other = dev("be", { archetype: "backend", languages: ["Python"], totalCommits: 100 });
+    const req = requirement({
+      languages: ["TypeScript", "CSS"],
+      stack: ["Next.js App Router", "React", "Tailwind"],
+      primaryArchetypeNeeded: "frontend",
+    });
+    const [top] = rankCohort([nextDev, other], req);
+    expect(top.devId).toBe("fe");
+    expect(top.verdict).toBe("fit");
   });
 });
 
@@ -112,7 +178,12 @@ describe("verdictFor", () => {
 describe("overallScore", () => {
   it("is 100 when every sub-score is 100", () => {
     expect(
-      overallScore({ stackOverlap: 100, archetypeMatch: 100, experienceDepth: 100 })
+      overallScore({
+        languageOverlap: 100,
+        frameworkOverlap: 100,
+        archetypeMatch: 100,
+        experienceDepth: 100,
+      })
     ).toBeCloseTo(100);
   });
 });
@@ -141,7 +212,13 @@ describe("rankCohort", () => {
 
   it("rounds returned sub-scores to one decimal", () => {
     const s = computeSubScores(cohort[2], req, cohort);
-    for (const v of [s.stackOverlap, s.archetypeMatch, s.experienceDepth, s.overall]) {
+    for (const v of [
+      s.languageOverlap,
+      s.frameworkOverlap,
+      s.archetypeMatch,
+      s.experienceDepth,
+      s.overall,
+    ]) {
       expect(Math.round(v * 10) / 10).toBe(v);
     }
   });

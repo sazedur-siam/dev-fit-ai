@@ -120,6 +120,11 @@ export interface DeveloperRepo {
   additions: number;
   deletions: number;
   languages: string[];
+  /**
+   * Frameworks, libraries and platforms used in this repo ("Next.js", "Django").
+   * Optional so developer documents seeded before frameworks existed still load.
+   */
+  frameworks?: string[];
 }
 
 export interface MockDeveloper {
@@ -136,6 +141,7 @@ export interface MockDeveloper {
 /** Developer with derived fields the UI/API want alongside the raw seed. */
 export interface DeveloperView extends MockDeveloper {
   languages: string[]; // union of repos[].languages
+  frameworks: string[]; // union of repos[].frameworks
   netLines: number; // linesAdded - linesDeleted
 }
 
@@ -150,7 +156,8 @@ export interface RepoRequirement {
 
 export interface FitScore {
   devId: string;
-  stackOverlap: number;
+  languageOverlap: number;
+  frameworkOverlap: number;
   archetypeMatch: number;
   experienceDepth: number;
   overall: number;

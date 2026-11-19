@@ -57,11 +57,8 @@ export default async function DeveloperDetailPage({
           <div className="mt-2.5">
             <ArchetypeBadge archetype={dev.archetype} />
           </div>
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {dev.languages.map((lang) => (
-              <StackTag key={lang}>{lang}</StackTag>
-            ))}
-          </div>
+          <SkillRow label="Languages" items={dev.languages} />
+          <SkillRow label="Frameworks" items={dev.frameworks} />
         </div>
         <Link
           href="/fit"
@@ -89,7 +86,7 @@ export default async function DeveloperDetailPage({
               <div>
                 <div className="font-semibold text-heading">{r.name}</div>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {r.languages.map((l) => (
+                  {[...(r.frameworks ?? []), ...r.languages].map((l) => (
                     <StackTag key={l}>{l}</StackTag>
                   ))}
                 </div>
@@ -138,6 +135,22 @@ export default async function DeveloperDetailPage({
           ))}
         </ul>
       </section>
+    </div>
+  );
+}
+
+function SkillRow({ label, items }: { label: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="mt-4">
+      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted">
+        {label}
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {items.map((item) => (
+          <StackTag key={item}>{item}</StackTag>
+        ))}
+      </div>
     </div>
   );
 }

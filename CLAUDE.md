@@ -99,15 +99,28 @@ orchestrator and the only place that composes all of the above.
 | [src/app/icon.svg](src/app/icon.svg) | Favicon, via Next's file convention. Same artwork as `Logo.tsx`. |
 
 Always consume developers through `getAllDevelopers()` / `getDeveloperById()`, never
-by importing `DEVELOPERS` directly — the helpers derive `languages` and `netLines`
+by importing `DEVELOPERS` directly — the helpers derive `languages`, `frameworks` and `netLines`
 that scoring and the UI both depend on.
 
 ## Scoring
 
 ```
-overall = 0.40*stackOverlap + 0.35*archetypeMatch + 0.25*experienceDepth
+overall = 0.25*languageOverlap + 0.20*frameworkOverlap
+        + 0.30*archetypeMatch  + 0.25*experienceDepth
 verdict = overall >= 75 ? "fit" : overall >= 55 ? "ramp-up" : "not fit"
 ```
+
+- `languageOverlap`: share of `requirement.languages` the developer has written.
+- `frameworkOverlap`: share of `requirement.stack` the developer has used, compared
+  through the alias table in [src/lib/skills.ts](src/lib/skills.ts)
+  (`"Next.js App Router"` = `"NextJS"` = `"next"`). The developer side is expanded
+  with implications (Next.js ⇒ React, DRF ⇒ Django), never the requirement side.
+  Stack entries that are really languages are skipped (languageOverlap already
+  counts them). **skills.ts is a fixed lookup table, never a model call;** add a
+  line to `ALIASES` to teach it a spelling.
+- Frameworks come from `repos[].frameworks` on each developer (optional on the type,
+  so documents seeded before 2.0.0 still load; they just score 0 on frameworks until
+  `npm run seed` is re-run). `DeveloperView.frameworks` is their union.
 
 Weights and thresholds live in [src/lib/config.ts](src/lib/config.ts).
 
@@ -120,19 +133,12 @@ fingerprints the constants per version and fails CI if they change under an
 unchanged version; its failure message gives the line to add. It can't see a
 formula change inside scoring.ts, so that bump is on you.
 
-Two behaviours that look like bugs but are deliberate, and one that is a genuine
-wart:
+Two behaviours that look like bugs but are deliberate:
 
 - `experienceDepth` is **cohort-relative** (percentile of `totalCommits`, blended
   70/30 with normalized net lines). Adding or removing a seed developer shifts
   everyone else's score. Expected — don't "fix" it with absolute thresholds without
   asking.
-- `stackOverlap` divides hits by `|languages ∪ stack|`, but a developer's
-  `languages` only ever contains languages — never framework strings like
-  `"Next.js App Router"`. So every entry in `requirement.stack` is an
-  unmatchable denominator term, which structurally depresses the sub-score and
-  makes a `"fit"` verdict hard to reach on framework-heavy repos. If a demo needs
-  higher scores, the honest fix is scoring `stack` separately, not reweighting.
 - `verdictFor()` uses the unrounded `overall`, while the value returned to the
   client is rounded to 1dp. A score of `74.96` displays as `75.0` but is still
   `"ramp-up"`. Cosmetic, but don't be surprised by it.

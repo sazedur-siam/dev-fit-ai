@@ -20,8 +20,10 @@ function initials(name: string): string {
 
 export function DeveloperCard({ dev }: { dev: DeveloperView }) {
   const net = dev.linesAdded - dev.linesDeleted;
-  const shown = dev.languages.slice(0, 4);
-  const overflow = dev.languages.length - shown.length;
+  // Frameworks first: "Next.js" says more about a developer than "TSX".
+  const skills = [...dev.frameworks, ...dev.languages];
+  const shown = skills.slice(0, 4);
+  const overflow = skills.length - shown.length;
 
   return (
     <Link

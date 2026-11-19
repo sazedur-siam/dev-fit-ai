@@ -14,6 +14,7 @@ import {
  */
 const KNOWN_FINGERPRINTS: Record<string, string> = {
   "1.0.0": "aa72009b25695be8",
+  "2.0.0": "31932ce5bd206c1b", // languages and frameworks scored separately
 };
 
 function scoringFingerprint(): string {
