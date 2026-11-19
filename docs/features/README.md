@@ -25,7 +25,7 @@ tests and CLAUDE.md then describe it, and the merged PR holds the original spec.
 | ✅ | 04 | Faster repo digest and a digest cache | S | none | No |
 | ✅ | 05 | Scoring version on every analysis | S | 01 | No |
 | ✅ | 06 | Score frameworks separately from languages | M | 01, 05 | No |
-| ⬜ | 07 | [Real developers imported from GitHub](07-real-developers.md) | L | 05, 06 | No |
+| ✅ | 07 | Real developers imported from GitHub | L | 05, 06 | No |
 | ⬜ | 08 | [Scheduled nightly refresh](08-scheduled-refresh.md) | M | 07 | No |
 | ⬜ | 09 | [AI Fluency score](09-ai-fluency-score.md) | M | 07 | No |
 | ⬜ | 10 | [Describe a need in plain text, with clarifying questions](10-text-need-search.md) | M | 03 | No |

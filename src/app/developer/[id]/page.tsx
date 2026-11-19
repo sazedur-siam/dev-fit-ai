@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { redirect } from "next/navigation";
-import { ArchetypeBadge, StackTag } from "@/components/ArchetypeBadge";
+import { ArchetypeBadge, SourceBadge, StackTag } from "@/components/ArchetypeBadge";
 import { getDeveloperById } from "@/lib/db/developers";
 import { getCurrentUser } from "@/lib/session";
 
@@ -54,9 +54,30 @@ export default async function DeveloperDetailPage({
           <h1 className="text-2xl font-extrabold tracking-tight text-heading sm:text-3xl">
             {dev.name}
           </h1>
-          <div className="mt-2.5">
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
             <ArchetypeBadge archetype={dev.archetype} />
+            <SourceBadge source={dev.source ?? "seed"} />
           </div>
+          <p className="mt-2.5 max-w-xl text-xs leading-relaxed text-muted">
+            {dev.source === "github" && dev.githubLogin ? (
+              <>
+                Built from{" "}
+                <a
+                  href={`https://github.com/${dev.githubLogin}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold text-body underline underline-offset-4 hover:text-heading"
+                >
+                  @{dev.githubLogin}
+                </a>
+                &rsquo;s <strong>public</strong> GitHub activity
+                {dev.importedAt ? ` on ${dev.importedAt.slice(0, 10)}` : ""}. Private work
+                isn&rsquo;t visible, and line counts are estimated from recent commits.
+              </>
+            ) : (
+              <>Sample developer: invented data for demonstrating DevFit.</>
+            )}
+          </p>
           <SkillRow label="Languages" items={dev.languages} />
           <SkillRow label="Frameworks" items={dev.frameworks} />
         </div>

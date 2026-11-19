@@ -27,6 +27,19 @@ export async function getDeveloperById(
   return doc ? toView(doc) : undefined;
 }
 
+/** Insert or replace one developer, keyed on the business `id`. */
+export async function upsertDeveloper(dev: MockDeveloper): Promise<"inserted" | "updated"> {
+  const col = await developers();
+  const res = await col.replaceOne({ id: dev.id }, dev, { upsert: true });
+  return res.upsertedCount > 0 ? "inserted" : "updated";
+}
+
+export async function deleteDeveloper(id: string): Promise<boolean> {
+  const col = await developers();
+  const res = await col.deleteOne({ id });
+  return res.deletedCount > 0;
+}
+
 export async function countDevelopers(): Promise<number> {
   const col = await developers();
   return col.countDocuments();

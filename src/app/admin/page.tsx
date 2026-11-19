@@ -2,8 +2,9 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { listUsers } from "@/lib/db/users";
 import { getKeyPresenceByUser } from "@/lib/db/keys";
-import { countDevelopers } from "@/lib/db/developers";
+import { getAllDevelopers } from "@/lib/db/developers";
 import { AdminUserTable, type AdminUserRow } from "@/components/AdminUserTable";
+import { AdminDevelopers, type AdminDeveloperRow } from "@/components/AdminDevelopers";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +14,30 @@ export default async function AdminPage() {
   // Authoritative check against MongoDB, not the JWT claim.
   if (user.role !== "admin") redirect("/");
 
-  const [users, presence, developerCount] = await Promise.all([
+  const [users, presence, developers] = await Promise.all([
     listUsers(),
     getKeyPresenceByUser(),
-    countDevelopers(),
+    getAllDevelopers(),
   ]);
+  const developerCount = developers.length;
+
+  // Real developers first, newest import first; samples after, by name.
+  const developerRows: AdminDeveloperRow[] = developers
+    .map((d) => ({
+      id: d.id,
+      name: d.name,
+      archetype: d.archetype,
+      source: d.source ?? "seed",
+      githubLogin: d.githubLogin ?? null,
+      importedAt: d.importedAt ?? null,
+      repoCount: d.repos.length,
+      totalCommits: d.totalCommits,
+    }))
+    .sort((a, b) =>
+      a.source !== b.source
+        ? a.source === "github" ? -1 : 1
+        : (b.importedAt ?? "").localeCompare(a.importedAt ?? "") || a.name.localeCompare(b.name)
+    );
 
   const rows: AdminUserRow[] = users.map((u) => ({
     ...u,
@@ -53,6 +73,10 @@ export default async function AdminPage() {
 
       <div className="mt-8">
         <AdminUserTable initial={rows} currentUserId={user.id} />
+      </div>
+
+      <div className="mt-10">
+        <AdminDevelopers initial={developerRows} />
       </div>
     </div>
   );

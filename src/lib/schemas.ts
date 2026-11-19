@@ -104,6 +104,22 @@ export const AdminCreateUserBodySchema = z.object({
       | "project_manager"),
 });
 
+export const ImportDeveloperBodySchema = z.object({
+  login: z
+    .string({ error: "GitHub username is required" })
+    .trim()
+    .min(1, { error: "GitHub username is required" })
+    // Accept "octocat", "@octocat", or a profile URL with or without the scheme.
+    .transform((l) =>
+      l
+        .replace(/^@/, "")
+        .replace(/^(https?:\/\/)?(www\.)?github\.com\//i, "")
+        .replace(/\/.*$/, "")
+    ),
+  /** Omitted or "auto": guess from the languages and frameworks found. */
+  archetype: z.enum(["auto", "frontend", "backend", "fullstack"]).optional().catch("auto"),
+});
+
 const ROLE_ERROR = 'role must be "admin" or "project_manager"';
 
 /** Either a password reset or a role change. */
