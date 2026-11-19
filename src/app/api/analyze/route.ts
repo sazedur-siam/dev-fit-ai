@@ -8,7 +8,7 @@ import type { AppUser } from "@/lib/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Digest + one Gemini call; slower than a default serverless timeout allows.
+// Digest + one AI model call; slower than a default serverless timeout allows.
 export const maxDuration = 60;
 
 export async function POST(req: Request) {

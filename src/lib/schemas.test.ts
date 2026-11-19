@@ -4,6 +4,7 @@ import {
   AdminCreateUserBodySchema,
   AdminUpdateUserBodySchema,
   KeyBodySchema,
+  LlmPreferenceBodySchema,
   parseJsonBody,
   RepoUrlBodySchema,
 } from "@/lib/schemas";
@@ -13,7 +14,7 @@ const ctx = {
   repoLabel: "acme/shop",
 };
 
-describe("coerceRequirement (Gemini call #1)", () => {
+describe("coerceRequirement (model call #1)", () => {
   it("passes a well-formed reply through", () => {
     const req = coerceRequirement(
       {
@@ -67,7 +68,7 @@ describe("coerceRequirement (Gemini call #1)", () => {
   });
 });
 
-describe("coerceExplanations (Gemini call #2)", () => {
+describe("coerceExplanations (model call #2)", () => {
   const ranked = [{ devId: "a" }, { devId: "b" }];
 
   it("returns exactly one explanation per ranked developer, in rank order", () => {
@@ -112,13 +113,35 @@ describe("request body schemas", () => {
     );
   });
 
-  it("keys: keeps the existing error messages", () => {
-    expect(firstError(KeyBodySchema.safeParse({ kind: "openai", value: "x" }))).toBe(
-      'kind must be "gemini" or "github"'
+  it("keys: accepts every AI provider and GitHub, nothing else", () => {
+    for (const kind of ["gemini", "openai", "anthropic", "github"]) {
+      expect(KeyBodySchema.safeParse({ kind, value: "x" }).success).toBe(true);
+    }
+    expect(firstError(KeyBodySchema.safeParse({ kind: "mistral", value: "x" }))).toBe(
+      'kind must be "gemini", "openai", "anthropic" or "github"'
     );
     expect(firstError(KeyBodySchema.safeParse({ kind: "gemini", value: " " }))).toBe(
       "value is required"
     );
+  });
+
+  it("llm preference: provider + valid model id, key optional and blank-means-keep", () => {
+    expect(
+      LlmPreferenceBodySchema.parse({ provider: "anthropic", model: " claude-opus-5-5 ", apiKey: "  " })
+    ).toEqual({ provider: "anthropic", model: "claude-opus-5-5", apiKey: undefined });
+    expect(
+      LlmPreferenceBodySchema.parse({ provider: "openai", model: "gpt-6.2-sol", apiKey: "sk-1" }).apiKey
+    ).toBe("sk-1");
+    expect(firstError(LlmPreferenceBodySchema.safeParse({ provider: "grok", model: "x" }))).toBe(
+      "Pick a provider: Gemini, OpenAI or Claude."
+    );
+    expect(firstError(LlmPreferenceBodySchema.safeParse({ provider: "gemini", model: "" }))).toBe(
+      "Pick a model."
+    );
+    // Interpolated into Gemini's URL path, so nothing path- or query-shaped.
+    for (const model of ["../keys", "a?key=x", "has space", "a#b"]) {
+      expect(LlmPreferenceBodySchema.safeParse({ provider: "gemini", model }).success).toBe(false);
+    }
   });
 
   it("admin create: anything but exactly 'admin' makes a project manager", () => {

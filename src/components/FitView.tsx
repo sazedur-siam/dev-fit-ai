@@ -27,14 +27,21 @@ function isValidRepoUrl(input: string): boolean {
 export function FitView({
   initialRepoUrl = "",
   initialNeedText = "",
-  hasGeminiKey,
+  hasLlmKey,
+  llmLabel,
+  llmKeyLabel,
   serverKeyAllowed,
 }: {
   /** Pre-filled repo URL, from `/fit?repo=`. */
   initialRepoUrl?: string;
   /** Pre-filled need description, from `/fit?need=`; opens in "describe" mode. */
   initialNeedText?: string;
-  hasGeminiKey: boolean;
+  /** Whether the active AI provider has a usable key (own or server). */
+  hasLlmKey: boolean;
+  /** The active model, e.g. "Claude Opus 5.5". */
+  llmLabel: string;
+  /** e.g. "Anthropic API key". */
+  llmKeyLabel: string;
   /** False for self-registered accounts, which never use the server's key. */
   serverKeyAllowed: boolean;
 }) {
@@ -150,7 +157,7 @@ export function FitView({
 
   return (
     <div>
-      {!hasGeminiKey && (
+      {!hasLlmKey && (
         <div className="mb-6 flex gap-3 rounded-xl border border-warn-line bg-warn-bg p-4 text-sm">
           <span aria-hidden className="mt-0.5 shrink-0 text-warn-fg">
             <svg
@@ -167,23 +174,16 @@ export function FitView({
             </svg>
           </span>
           <div>
-            <div className="font-bold text-warn-fg">No Gemini key configured</div>
+            <div className="font-bold text-warn-fg">No AI provider key configured</div>
             <p className="mt-1 text-body">
-              Analysis needs a Gemini API key.{" "}
+              Analysis is set to run on {llmLabel}, which needs an {llmKeyLabel}.{" "}
               <Link
                 href="/settings"
                 className="font-semibold text-accent-soft-fg underline underline-offset-2 hover:text-accent"
               >
-                Add yours in Settings
+                Add one or pick another provider in Settings
               </Link>
-              {serverKeyAllowed ? (
-                <>
-                  {" "}
-                  — or set <code>GEMINI_API_KEY</code> on the server.
-                </>
-              ) : (
-                "."
-              )}
+              {serverKeyAllowed ? " (or configure a server key)." : "."}
             </p>
           </div>
         </div>
@@ -199,8 +199,8 @@ export function FitView({
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-body">
           {mode === "repo"
-            ? "Paste a public GitHub repo URL. DevFit builds a digest, asks Gemini what kind of developer it needs, and ranks the team against it."
-            : "No repo yet? Describe the project or role in plain words. Gemini turns it into a requirement (asking up to 3 quick questions if something essential is missing), then the team is ranked the same way."}{" "}
+            ? "Paste a public GitHub repo URL. DevFit builds a digest, asks your AI model what kind of developer it needs, and ranks the team against it."
+            : "No repo yet? Describe the project or role in plain words. Your AI model turns it into a requirement (asking up to 3 quick questions if something essential is missing), then the team is ranked the same way."}{" "}
           Scoring is deterministic — the AI narrates, it doesn&rsquo;t re-rank.
         </p>
 
@@ -342,8 +342,8 @@ export function FitView({
           message={state.message}
           hint={
             mode === "repo"
-              ? "Fetching the repo tree and up to 20 key files, then two Gemini calls. Usually 5–30 seconds."
-              : "One or two Gemini calls. Usually 5–15 seconds."
+              ? "Fetching the repo tree and up to 20 key files, then two AI model calls. Usually 5–30 seconds."
+              : "One or two AI model calls. Usually 5–15 seconds."
           }
         />
       )}
@@ -357,13 +357,13 @@ export function FitView({
           <div className="mt-2 text-xs text-body">
             {mode === "repo" ? (
               <>
-                Common causes: missing <code>GEMINI_API_KEY</code>, GitHub rate-limit hit
+                Common causes: a missing or rejected AI provider key, GitHub rate-limit hit
                 (add <code>GITHUB_TOKEN</code>), or a private/deleted repo.
               </>
             ) : (
               <>
-                Common causes: missing <code>GEMINI_API_KEY</code>, or the Gemini quota
-                is used up for now.
+                Common causes: a missing or rejected AI provider key, or the
+                provider&rsquo;s quota is used up for now.
               </>
             )}
           </div>

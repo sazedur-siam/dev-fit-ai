@@ -1,11 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/gemini", () => ({ geminiJSON: vi.fn() }));
-const gemini = await import("@/lib/gemini");
+vi.mock("@/lib/llm", () => ({ llmJSON: vi.fn() }));
+const llm = await import("@/lib/llm");
 const { parseNeed, rankAndExplain } = await import("@/lib/analyzer");
 const { NeedBodySchema, NeedQuestionsSchema } = await import("@/lib/schemas");
 
-const creds = { geminiApiKey: "k", githubToken: null, geminiSource: "user", githubSource: "none" } as const;
+const creds = {
+  llm: { provider: "gemini", model: "gemini-test", apiKey: "k" },
+  llmSource: "user",
+  githubToken: null,
+  githubSource: "none",
+} as const;
 const requirementReply = {
   stack: ["Magento"],
   languages: ["PHP"],
@@ -15,11 +20,11 @@ const requirementReply = {
   summary: "A Magento B2B pricing module.",
 };
 
-beforeEach(() => vi.mocked(gemini.geminiJSON).mockReset());
+beforeEach(() => vi.mocked(llm.llmJSON).mockReset());
 
 describe("parseNeed", () => {
   it("returns clarifying questions on the first call when the model asks", async () => {
-    vi.mocked(gemini.geminiJSON).mockResolvedValue({
+    vi.mocked(llm.llmJSON).mockResolvedValue({
       ...requirementReply,
       questions: [{ id: "side", question: "Frontend or backend?", options: ["Frontend", "Backend", "Both"] }],
     });
@@ -31,30 +36,30 @@ describe("parseNeed", () => {
   });
 
   it("ignores questions on the follow-up call, so a PM is asked at most once", async () => {
-    vi.mocked(gemini.geminiJSON).mockResolvedValue({
+    vi.mocked(llm.llmJSON).mockResolvedValue({
       ...requirementReply,
       questions: [{ question: "Again?", options: ["a", "b"] }],
     });
     const out = await parseNeed("We need a Magento dev", [], false, creds);
     expect(out.status).toBe("ready");
-    const prompt = vi.mocked(gemini.geminiJSON).mock.calls[0][0];
+    const prompt = vi.mocked(llm.llmJSON).mock.calls[0][0];
     expect(prompt).toContain("Do NOT ask questions");
   });
 
   it("puts the PM's answers into the prompt", async () => {
-    vi.mocked(gemini.geminiJSON).mockResolvedValue(requirementReply);
+    vi.mocked(llm.llmJSON).mockResolvedValue(requirementReply);
     await parseNeed("Shop work", [{ question: "Frontend or backend?", answer: "Backend" }], false, creds);
-    expect(vi.mocked(gemini.geminiJSON).mock.calls[0][0]).toContain("- Frontend or backend? → Backend");
+    expect(vi.mocked(llm.llmJSON).mock.calls[0][0]).toContain("- Frontend or backend? → Backend");
   });
 
   it("produces the same RepoRequirement shape a repo would", async () => {
-    vi.mocked(gemini.geminiJSON).mockResolvedValue({ ...requirementReply, questions: [] });
+    vi.mocked(llm.llmJSON).mockResolvedValue({ ...requirementReply, questions: [] });
     const out = await parseNeed("We need a Magento dev for B2B pricing", [], true, creds);
     expect(out).toEqual({ status: "ready", requirement: requirementReply });
   });
 
   it("degrades a malformed reply to defaults, using the text as the summary", async () => {
-    vi.mocked(gemini.geminiJSON).mockResolvedValue("nonsense");
+    vi.mocked(llm.llmJSON).mockResolvedValue("nonsense");
     const out = await parseNeed("Someone to help on our internal tools", [], true, creds);
     expect(out).toMatchObject({
       status: "ready",
@@ -69,7 +74,7 @@ describe("parseNeed", () => {
 
 describe("rankAndExplain (shared by repo and need runs)", () => {
   it("ranks deterministically and attaches explanations", async () => {
-    vi.mocked(gemini.geminiJSON).mockResolvedValue({
+    vi.mocked(llm.llmJSON).mockResolvedValue({
       explanations: [{ devId: "be", explanation: "PHP + Magento." }],
       topPickRationale: "be fits.",
     });

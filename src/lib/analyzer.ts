@@ -1,5 +1,5 @@
 import { buildRepoDigest, getRepoHead, parseRepoUrl, type RepoDigest } from "@/lib/github";
-import { GEMINI_MODEL, REQUIREMENT_PROMPT_VERSION } from "@/lib/config";
+import { REQUIREMENT_PROMPT_VERSION } from "@/lib/config";
 import {
   digestCacheKey,
   getCachedDigest,
@@ -8,13 +8,13 @@ import {
   saveDigest,
   saveRequirement,
 } from "@/lib/db/repoCache";
-import { geminiJSON } from "@/lib/gemini";
+import { llmJSON } from "@/lib/llm";
 import type {
   AnalyzeAndRankResult,
   ClarifyingQuestion,
   DeveloperView,
   FitScore,
-  GeminiExplanationResponse,
+  ExplanationResponse,
   RepoRequirement,
 } from "@/lib/types";
 import { rankCohort } from "@/lib/scoring";
@@ -33,7 +33,7 @@ function fallbackLanguagesFromBytes(bytes: Record<string, number>): string[] {
 }
 
 /**
- * Turn Gemini's raw reply into a complete RepoRequirement. Never throws: every
+ * Turn The model's raw reply into a complete RepoRequirement. Never throws: every
  * field has a schema default, and the two that need repo context (languages,
  * summary) fall back to the language byte counts and the repo name.
  */
@@ -53,13 +53,13 @@ export function coerceRequirement(
 }
 
 /**
- * Turn Gemini's raw explanation reply into exactly one explanation per ranked
+ * Turn The model's raw explanation reply into exactly one explanation per ranked
  * developer, in ranking order. Missing or unknown entries get a neutral default.
  */
 export function coerceExplanations(
   raw: unknown,
   ranked: Pick<FitScore, "devId">[]
-): GeminiExplanationResponse {
+): ExplanationResponse {
   const parsed = ExplanationResponseSchema.parse(raw);
   const byId = new Map(parsed.explanations.map((e) => [e.devId, e.explanation]));
   return {
@@ -75,7 +75,7 @@ export function coerceExplanations(
 }
 
 /**
- * Whether Gemini's raw reply was complete enough to cache. A reply that only
+ * Whether The model's raw reply was complete enough to cache. A reply that only
  * survived through schema defaults would otherwise be pinned for a week.
  */
 export function isCacheableReply(raw: unknown): boolean {
@@ -104,10 +104,10 @@ async function bestEffort<T>(label: string, fn: () => Promise<T>): Promise<T | n
 }
 
 /**
- * Ask Gemini for a RepoRequirement given a digest. Applies safe defaults.
+ * Ask the AI model for a RepoRequirement given a digest. Applies safe defaults.
  *
  * Public repos are cached per commit SHA: the digest (skips ~20 file reads) and
- * the requirement for the current model + prompt version (skips Gemini call #1,
+ * the requirement for the current model + prompt version (skips model call #1,
  * and makes repeat runs on one commit return the same requirement). Private repos
  * are never cached, because the cache key has no user in it.
  */
@@ -122,7 +122,9 @@ export async function analyzeRepo(
   const head = await getRepoHead(owner, repo, creds.githubToken);
   const cacheable = !head.isPrivate;
   const dKey = digestCacheKey(owner, repo, head.sha);
-  const rKey = requirementCacheKey(owner, repo, head.sha, GEMINI_MODEL, REQUIREMENT_PROMPT_VERSION);
+  // Keyed by provider + model: a requirement is only reused for the model that wrote it.
+  const modelKey = `${creds.llm.provider}/${creds.llm.model}`;
+  const rKey = requirementCacheKey(owner, repo, head.sha, modelKey, REQUIREMENT_PROMPT_VERSION);
 
   if (cacheable) {
     const hit = await bestEffort("read requirement", () => getCachedRequirement(rKey));
@@ -165,7 +167,7 @@ Rules:
 ${digestObj.digest}
 --- DIGEST END ---`;
 
-  const raw = await geminiJSON<unknown>(prompt, creds.geminiApiKey);
+  const raw = await llmJSON<unknown>(prompt, creds.llm);
   const requirement = coerceRequirement(raw, {
     languageBytes: digestObj.languageBytes,
     repoLabel: `${digestObj.owner}/${digestObj.repo}`,
@@ -187,7 +189,7 @@ ${digestObj.digest}
 }
 
 /**
- * One Gemini pass to write an explanation per developer + a top-pick rationale.
+ * One model pass to write an explanation per developer + a top-pick rationale.
  * Scoring is already decided; the AI only narrates.
  */
 export async function explainRanking(
@@ -195,7 +197,7 @@ export async function explainRanking(
   ranked: Omit<FitScore, "explanation">[],
   cohort: DeveloperView[],
   creds: ResolvedCredentials
-): Promise<GeminiExplanationResponse> {
+): Promise<ExplanationResponse> {
   const cohortLite = cohort.map((d) => ({
     id: d.id,
     name: d.name,
@@ -253,7 +255,7 @@ Rules:
 - Never contradict the numeric verdict.
 - Be specific. No filler ("This developer would be a great addition"). Aim for review-caliber sharpness.`;
 
-  const raw = await geminiJSON<unknown>(prompt, creds.geminiApiKey);
+  const raw = await llmJSON<unknown>(prompt, creds.llm);
   return coerceExplanations(raw, ranked);
 }
 
@@ -349,7 +351,7 @@ Rules:
 ${questionRule}
 - Return valid JSON only.`;
 
-  const raw = await geminiJSON<unknown>(prompt, creds.geminiApiKey);
+  const raw = await llmJSON<unknown>(prompt, creds.llm);
   const questions = allowQuestions
     ? NeedQuestionsSchema.parse((raw as { questions?: unknown } | null)?.questions)
     : [];

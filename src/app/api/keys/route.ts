@@ -46,7 +46,7 @@ export async function DELETE(req: Request) {
     const kind = new URL(req.url).searchParams.get("kind");
     if (!isKeyKind(kind)) {
       return NextResponse.json(
-        { error: 'kind must be "gemini" or "github"' },
+        { error: 'kind must be "gemini", "openai", "anthropic" or "github"' },
         { status: 400 }
       );
     }

@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isValidModelId } from "@/lib/providers";
 
 /**
- * Runtime schemas for everything that crosses a trust boundary: the two Gemini
+ * Runtime schemas for everything that crosses a trust boundary: the two AI model
  * replies and every route's request body.
  *
  * The two kinds are deliberately different in strictness:
  *
  * - **Model output is lenient.** Every field has a `.catch()` default, so a
- *   malformed Gemini reply degrades to a usable value rather than failing a
+ *   malformed model reply degrades to a usable value rather than failing a
  *   request the user already waited 30 seconds for.
  * - **Request bodies are strict.** A bad body is a client bug and gets a 400 with
  *   the first issue's message, which is shown to the user as-is.
@@ -29,10 +30,10 @@ const stringList = z
     items.map((s) => String(s).trim()).filter((s) => s.length > 0)
   );
 
-// ───────────────────────── Gemini output ─────────────────────────
+// ───────────────────────── Model output ─────────────────────────
 
 /**
- * Gemini call #1. `languages` and `summary` can come back empty; the analyzer
+ * Model call #1. `languages` and `summary` can come back empty; the analyzer
  * fills those from repo context (language bytes, repo name) that this schema
  * doesn't have.
  */
@@ -48,7 +49,7 @@ export const RawRequirementSchema = z.preprocess(
   })
 );
 
-/** Gemini call #2. Entries without a string `devId` are dropped. */
+/** Model call #2. Entries without a string `devId` are dropped. */
 export const ExplanationResponseSchema = z.preprocess(
   asObject,
   z.object({
@@ -70,7 +71,7 @@ export const ExplanationResponseSchema = z.preprocess(
 // ───────────────────────── Request bodies ─────────────────────────
 
 /**
- * Gemini's reply to a described need: requirement fields plus optional
+ * The model's reply to a described need: requirement fields plus optional
  * clarifying questions. Malformed questions are dropped; at most 3, each with
  * 2–4 options.
  */
@@ -115,10 +116,50 @@ export const RepoUrlBodySchema = z.object({
 });
 
 export const KeyBodySchema = z.object({
-  kind: z.enum(["gemini", "github"], { error: 'kind must be "gemini" or "github"' }),
+  kind: z.enum(["gemini", "openai", "anthropic", "github"], {
+    error: 'kind must be "gemini", "openai", "anthropic" or "github"',
+  }),
   value: z
     .string({ error: "value is required" })
     .refine((v) => v.trim().length > 0, { error: "value is required" }),
+});
+
+const LlmProviderField = z.enum(["gemini", "openai", "anthropic"], {
+  error: "Pick a provider: Gemini, OpenAI or Claude.",
+});
+
+const ModelIdField = z
+  .string({ error: "Pick a model." })
+  .trim()
+  .min(1, { error: "Pick a model." })
+  .refine(isValidModelId, { error: "That model id doesn't look right. Use the id exactly as the provider writes it, e.g. claude-opus-5-5." });
+
+/** An optional key typed into the picker; empty means "use the stored one". */
+const DraftKeyField = z
+  .string()
+  .trim()
+  .max(500, { error: "That key is too long to be an API key." })
+  .optional()
+  .transform((v) => v || undefined);
+
+/** PUT /api/llm: choose provider + model, optionally saving a new key with it. */
+export const LlmPreferenceBodySchema = z.object({
+  provider: LlmProviderField,
+  model: ModelIdField,
+  apiKey: DraftKeyField,
+});
+
+/** POST /api/llm/models: list a provider's models with a typed or stored key. */
+export const LlmModelsBodySchema = z.object({
+  provider: LlmProviderField,
+  apiKey: DraftKeyField,
+});
+
+/** POST /api/llm/test: one tiny real call, to prove a provider + model + key work. */
+export const LlmTestBodySchema = z.object({
+  provider: LlmProviderField,
+  model: ModelIdField,
+  apiKey: DraftKeyField,
 });
 
 export const RegisterBodySchema = z.object({

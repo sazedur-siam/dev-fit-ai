@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { listUsers } from "@/lib/db/users";
 import { getKeyPresenceByUser } from "@/lib/db/keys";
+import { isLlmProvider } from "@/lib/types";
 import { getAllDevelopers } from "@/lib/db/developers";
 import { getLastRefreshRun } from "@/lib/db/refreshRuns";
 import { AdminUserTable, type AdminUserRow } from "@/components/AdminUserTable";
@@ -43,7 +44,7 @@ export default async function AdminPage() {
 
   const rows: AdminUserRow[] = users.map((u) => ({
     ...u,
-    hasGeminiKey: (presence[u.id] ?? []).includes("gemini"),
+    aiKeyProviders: (presence[u.id] ?? []).filter(isLlmProvider),
     hasGithubKey: (presence[u.id] ?? []).includes("github"),
   }));
 
@@ -66,7 +67,7 @@ export default async function AdminPage() {
           />
           <Stat
             label="With keys"
-            value={rows.filter((r) => r.hasGeminiKey || r.hasGithubKey).length}
+            value={rows.filter((r) => r.aiKeyProviders.length > 0 || r.hasGithubKey).length}
             accent
           />
           <Stat label="Developers" value={developerCount} />

@@ -10,13 +10,13 @@ import type { AppUser } from "@/lib/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// One Gemini call, two if the first draft mentions a number.
+// One AI model call, two if the first draft mentions a number.
 export const maxDuration = 60;
 
 /**
  * Draft (never send) a first-contact email to a developer, about one of your own
  * saved analyses. The analysis is loaded scoped to you, so someone else's id is a
- * 404. Uses your own Gemini key; self-service accounts never get the server's.
+ * 404. Uses your own AI provider key; self-service accounts never get the server's.
  */
 export async function POST(req: Request) {
   let user: AppUser;

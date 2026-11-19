@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Create account" };
 
 /**
  * Public, like /login. Every new account is a project manager and has to save
- * its own Gemini key before it can run a fit check.
+ * its own AI provider key (Gemini, OpenAI or Claude) before it can run a fit check.
  */
 export default async function RegisterPage() {
   const session = await readSessionSafe();
@@ -32,7 +32,7 @@ export default async function RegisterPage() {
           Create your Dev<span className="text-accent">Fit</span> account
         </h1>
         <p className="mt-2 text-sm text-body">
-          You&rsquo;ll add your own Gemini API key after signing up.
+          You&rsquo;ll add your own Gemini, OpenAI or Claude API key after signing up.
         </p>
 
         <div className="mt-7">

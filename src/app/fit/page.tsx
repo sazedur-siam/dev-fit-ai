@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { resolveCredentials } from "@/lib/credentials";
 import { FitView } from "@/components/FitView";
+import { PROVIDER_META, describeModel } from "@/lib/providers";
 import { isSelfService } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,9 @@ export default async function FitPage({
     <FitView
       initialRepoUrl={initialRepoUrl}
       initialNeedText={initialNeedText}
-      hasGeminiKey={creds.geminiSource !== "none"}
+      hasLlmKey={creds.llmSource !== "none"}
+      llmLabel={describeModel(creds.llm.provider, creds.llm.model)}
+      llmKeyLabel={PROVIDER_META[creds.llm.provider].keyLabel}
       serverKeyAllowed={!isSelfService(user.source)}
     />
   );

@@ -1,6 +1,6 @@
 import { COLLECTIONS, getDb } from "@/lib/mongodb";
 import { maskSecret, openSecret, sealSecret, type SealedSecret } from "@/lib/crypto";
-import type { KeyKind, KeyStatus } from "@/lib/types";
+import { LLM_PROVIDERS, type KeyKind, type KeyStatus } from "@/lib/types";
 
 interface UserKeyDoc {
   userId: string;
@@ -14,7 +14,8 @@ async function keys() {
   return (await getDb()).collection<UserKeyDoc>(COLLECTIONS.userKeys);
 }
 
-export const KEY_KINDS: KeyKind[] = ["gemini", "github"];
+/** AI providers first (in picker order), then GitHub. */
+export const KEY_KINDS: KeyKind[] = [...LLM_PROVIDERS, "github"];
 
 export function isKeyKind(value: unknown): value is KeyKind {
   return typeof value === "string" && KEY_KINDS.includes(value as KeyKind);
@@ -64,6 +65,26 @@ export async function readUserKey(
     // rather than throwing — the caller's "no key" path is the safe outcome.
     return null;
   }
+}
+
+/**
+ * Every stored key for one user, decrypted, in one query. Server-side only.
+ * Kinds that are unset or fail to decrypt are simply absent.
+ */
+export async function readUserKeys(
+  userId: string
+): Promise<Partial<Record<KeyKind, string>>> {
+  const col = await keys();
+  const docs = await col.find({ userId }).toArray();
+  const out: Partial<Record<KeyKind, string>> = {};
+  for (const doc of docs) {
+    try {
+      out[doc.kind] = openSecret(doc.sealed);
+    } catch {
+      // Same stance as readUserKey(): an undecryptable key counts as unset.
+    }
+  }
+  return out;
 }
 
 export async function deleteUserKey(

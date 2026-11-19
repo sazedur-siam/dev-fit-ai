@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { getKeyStatuses } from "@/lib/db/keys";
+import { getLlmSettings } from "@/lib/credentials";
 import { countUserAnalyses } from "@/lib/db/analyses";
 import { KeyManager } from "@/components/KeyManager";
+import { AiModelSettings } from "@/components/ModelPicker";
 import { ROLE_LABELS, isSelfService } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -11,10 +13,12 @@ export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [keys, analysisCount] = await Promise.all([
+  const [keys, llmSettings, analysisCount] = await Promise.all([
     getKeyStatuses(user.id),
+    getLlmSettings(user),
     countUserAnalyses(user.id),
   ]);
+  const serverKeyAllowed = !isSelfService(user.source);
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -53,10 +57,16 @@ export default async function SettingsPage() {
       <h2 className="mt-8 text-lg font-bold text-heading">Your API keys</h2>
       <p className="mb-4 mt-1.5 text-sm leading-relaxed text-body">
         DevFit uses your own credentials, so your usage counts against your quota,
-        not a shared one.
+        not a shared one. Bring a key from Gemini, OpenAI or Claude and pick the model.
       </p>
 
-      <KeyManager initial={keys} serverKeyAllowed={!isSelfService(user.source)} />
+      <div className="space-y-4">
+        <AiModelSettings initial={llmSettings} serverKeyAllowed={serverKeyAllowed} />
+        <KeyManager
+          initial={keys.filter((k) => k.kind === "github")}
+          serverKeyAllowed={serverKeyAllowed}
+        />
+      </div>
     </div>
   );
 }

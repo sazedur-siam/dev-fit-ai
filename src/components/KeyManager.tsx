@@ -4,17 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { KeyKind, KeyStatus } from "@/lib/types";
 
-const META: Record<
-  KeyKind,
-  { label: string; help: string; link: string; linkLabel: string; placeholder: string }
+/**
+ * Cards for non-AI credentials. AI provider keys are managed by the model picker
+ * (`AiModelSettings`), so only kinds listed here are rendered.
+ */
+const META: Partial<
+  Record<
+    KeyKind,
+    { label: string; help: string; link: string; linkLabel: string; placeholder: string }
+  >
 > = {
-  gemini: {
-    label: "Gemini API key",
-    help: "Required to analyse a repository. Used for the two model calls per fit run.",
-    link: "https://aistudio.google.com/app/apikey",
-    linkLabel: "Get a key",
-    placeholder: "AQ.Ab8… or AIza…",
-  },
   github: {
     label: "GitHub token",
     help: "Optional for public repos, required to list your own repositories. Raises the rate limit from 60 to 5,000 req/hr.",
@@ -65,7 +64,7 @@ export function KeyManager({
       // so invalidate the client cache rather than let those go stale.
       router.refresh();
       setDrafts((prev) => ({ ...prev, [kind]: "" }));
-      setNotice(`${META[kind].label} saved.`);
+      setNotice(`${META[kind]?.label ?? "Key"} saved.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save key");
     } finally {
@@ -83,7 +82,7 @@ export function KeyManager({
       if (!res.ok) throw new Error(json?.error || "Could not delete key");
       setStatuses(json.keys as KeyStatus[]);
       router.refresh();
-      setNotice(`${META[kind].label} removed.`);
+      setNotice(`${META[kind]?.label ?? "Key"} removed.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete key");
     } finally {
@@ -106,6 +105,7 @@ export function KeyManager({
 
       {statuses.map((status) => {
         const meta = META[status.kind];
+        if (!meta) return null;
         const isBusy = busy === status.kind;
         return (
           <section

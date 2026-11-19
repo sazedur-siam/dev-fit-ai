@@ -110,6 +110,8 @@ export async function GET() {
     ADMIN_PASSWORD: present("ADMIN_PASSWORD"),
     GOOGLE_SIGN_IN: present("GOOGLE_CLIENT_ID") && present("GOOGLE_CLIENT_SECRET"),
     GEMINI_MODEL: process.env.GEMINI_MODEL?.trim() || "(default)",
+    OPENAI_MODEL: process.env.OPENAI_MODEL?.trim() || "(default)",
+    ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL?.trim() || "(default)",
   };
 
   const problems: string[] = [];

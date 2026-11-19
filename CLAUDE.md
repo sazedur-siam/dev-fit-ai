@@ -3,7 +3,8 @@
 # DevFit
 
 Paste a public GitHub repo URL → the app builds a
-digest of the repo, asks Gemini what kind of developer it needs, scores 10 seeded
+digest of the repo, asks an AI model (Gemini, OpenAI or Claude, the user's pick)
+what kind of developer it needs, scores 10 seeded
 developers against that requirement with **deterministic** sub-scores, and returns
 a ranked fit list with plain-language explanations.
 
@@ -11,7 +12,8 @@ Sign-in is **email + password** (NextAuth v4 Credentials) plus optional **Google
 **Every page is behind the login** — the only public routes are `/login` and
 `/register`. One `admin` is bootstrapped from env; everyone else is a
 `project_manager`, self-registered or created by the admin.
-Users store their **own** Gemini/GitHub credentials, encrypted at rest. MongoDB
+Users store their **own** AI provider (Gemini / OpenAI / Anthropic) and GitHub
+credentials, encrypted at rest, and pick a provider + model in Settings. MongoDB
 holds users, encrypted keys, the developer cohort and per-user analysis history.
 
 ## Commands
@@ -48,7 +50,7 @@ var" rule below.
 
 **Scoring is deterministic. The AI only narrates.**
 
-Gemini is called exactly twice per `/api/fit` request:
+The user's chosen AI model is called exactly twice per `/api/fit` request:
 
 1. `analyzeRepo()` — digest → `RepoRequirement` (stack, languages, archetype, complexity)
 2. `explainRanking()` — writes one explanation per developer + a top-pick rationale
@@ -66,9 +68,9 @@ repoUrl
   → getRepoHead()             2 REST calls: metadata + head commit SHA
   → [cache]                   public repos only: requirement / digest per SHA
   → buildRepoDigest()         2 REST calls + up to 20 raw file reads, 5 at a time
-  → analyzeRepo()             src/lib/analyzer.ts  → Gemini #1 → RepoRequirement
+  → analyzeRepo()             src/lib/analyzer.ts  → model #1 → RepoRequirement
   → rankCohort()              src/lib/scoring.ts   → pure, sorted by overall desc
-  → explainRanking()          src/lib/analyzer.ts  → Gemini #2 → explanations
+  → explainRanking()          src/lib/analyzer.ts  → model #2 → explanations
   → { requirement, ranked, topPickId, topPickRationale }
 ```
 
@@ -78,9 +80,9 @@ point:
 
 ```
 needText (+ answers)
-  → parseNeed()               src/lib/analyzer.ts  → Gemini #1 → RepoRequirement
+  → parseNeed()               src/lib/analyzer.ts  → model #1 → RepoRequirement
                               (or up to 3 clarifying questions, first call only)
-  → rankAndExplain()          same deterministic ranking + Gemini #2
+  → rankAndExplain()          same deterministic ranking + model #2
 ```
 
 `POST /api/need` runs it. Rules: a PM is asked **at most once**. The follow-up call
@@ -94,7 +96,7 @@ shape a repo does, so scoring has one code path; don't fork it. History stores
 | Path | Role |
 | --- | --- |
 | [src/lib/types.ts](src/lib/types.ts) | All shared types. Start here. |
-| [src/lib/schemas.ts](src/lib/schemas.ts) | Zod schemas: lenient for Gemini output, strict for request bodies; `parseJsonBody()`. |
+| [src/lib/schemas.ts](src/lib/schemas.ts) | Zod schemas: lenient for model output, strict for request bodies; `parseJsonBody()`. |
 | [src/lib/auth.ts](src/lib/auth.ts) | NextAuth options: Credentials + optional Google provider, JWT callbacks. |
 | [src/lib/session.ts](src/lib/session.ts) | `requireUser` / `requireAdmin` — the authorization boundary. |
 | [src/lib/crypto.ts](src/lib/crypto.ts) | AES-256-GCM seal/open + masking for stored keys. |
@@ -105,7 +107,9 @@ shape a repo does, so scoring has one code path; don't fork it. History stores
 | [src/lib/config.ts](src/lib/config.ts) | Weights, thresholds, digest limits, model name. Tunable during a demo. |
 | [src/lib/scoring.ts](src/lib/scoring.ts) | Pure sub-scores + ranking. No I/O, no AI. |
 | [src/lib/github.ts](src/lib/github.ts) | Repo digest builder + URL parsing. |
-| [src/lib/gemini.ts](src/lib/gemini.ts) | Raw Gemini REST client, JSON-mode + retry. |
+| [src/lib/llm.ts](src/lib/llm.ts) | `llmJSON()`: one call to the chosen provider (Gemini / OpenAI / Claude), JSON + one retry; model listing. |
+| [src/lib/providers.ts](src/lib/providers.ts) | Client-safe provider catalog: labels, key links, env var names, default + suggested models. |
+| [src/lib/gemini.ts](src/lib/gemini.ts) | Raw Gemini REST client (text, model list, embeddings). OpenAI and Claude go through their official SDKs in llm.ts. |
 | [src/lib/analyzer.ts](src/lib/analyzer.ts) | Prompts + orchestration. |
 | [src/lib/developerHelpers.ts](src/lib/developerHelpers.ts) | `MockDeveloper` → `DeveloperView` (derives `languages`, `netLines`). |
 | [src/data/developers.ts](src/data/developers.ts) | 10 seeded sample developers: 4 frontend, 3 backend, 3 fullstack. |
@@ -173,9 +177,9 @@ Two behaviours that look like bugs but are deliberate:
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | **Yes** for sign-in | Bootstraps the single admin. Created by `npm run seed`, and self-healed on that email's first login attempt if seed wasn't run. **Only ever creates** — it will not overwrite a password the admin later changed, so editing these does not reset an existing account (use the dashboard's *Reset password*). |
 | `ADMIN_NAME` | No | Display name for the bootstrapped admin. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | No | Enables "Continue with Google". The provider isn't registered and the button is hidden when unset. Redirect URI: `<NEXTAUTH_URL>/api/auth/callback/google`. |
-| `GEMINI_API_KEY` | No | Fallback when a user hasn't saved their own. **Admin-created accounts only** — self-registered and Google accounts never get it. |
+| `GEMINI_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | No | Fallback for that provider when a user hasn't saved their own. **Admin-created accounts only** — self-registered and Google accounts never get them. |
 | `GITHUB_TOKEN` | No | Same, for GitHub (same restriction). Unauthenticated GitHub is 60 req/hr; an uncached run costs 4 REST calls (meta, SHA, tree, languages); a cached one costs 2. |
-| `GEMINI_MODEL` | No | Defaults to `gemini-3.6-flash`. |
+| `GEMINI_MODEL` / `OPENAI_MODEL` / `ANTHROPIC_MODEL` | No | The model used for that provider when a user hasn't picked one. Defaults in [providers.ts](src/lib/providers.ts): `gemini-3.6-flash`, `gpt-6.2-sol`, `claude-opus-5-5`. |
 
 Never `throw` at module scope for a missing env var. `auth.ts` originally did, which
 broke `npm run build` anywhere without secrets — checks belong at request time
@@ -188,6 +192,17 @@ works; and some models (`gemini-3.5-flash-lite`) return 200 with **empty content
 which `geminiText()` throws on. Always probe a candidate with a real
 `generateContent` call using `responseMimeType: application/json` before adopting it.
 `gemini-flash-latest` is the alias to use if you'd rather not revisit this.
+The same holds for every provider, which is why the model picker loads the live
+list with the user's key, accepts a custom id, and has a **Test connection** button
+(`POST /api/llm/test`) that makes a real call. Suggested models in `providers.ts`
+are a starting point, not the source of truth.
+
+**Provider quirks the adapters in [llm.ts](src/lib/llm.ts) handle.** OpenAI uses the
+Responses API with `text.format: json_object` and `reasoning.effort: "low"` (only for
+reasoning models: `gpt-5+`, `o*`). Claude gets no `temperature`/`top_p` (current
+models 400 on them) and no assistant prefill, `output_config.effort: "low"` on the 5
+generation, and server-side refusal fallbacks (`fallbacks: "default"`) on the models
+that support them; a `refusal` stop reason surfaces as a clear error.
 
 ## Auth and the key vault
 
@@ -235,8 +250,11 @@ pipeline upsert and expired by a TTL index. Three things are deliberate:
   password check needs the same DB anyway), and the driver error is logged, never
   thrown, because anything thrown in `authorize()` reaches the client as `?error=`.
 
-Credential resolution is user-key → env-key → none
-([src/lib/credentials.ts](src/lib/credentials.ts)). The env fallback keeps a
+Credential resolution is user-key → env-key → none, per provider
+([src/lib/credentials.ts](src/lib/credentials.ts)). The provider and model come from
+`llm` on the user document (set by `PUT /api/llm`); without one, `pickLlm()` takes
+the first provider with a user key, then a server key, then Gemini. A key is never
+borrowed across providers. The env fallback keeps a
 single-operator deployment working; `credentialSources` on the `/api/fit` response
 reports which one was actually used. **Self-service accounts (`source` `"self"` or
 `"google"`) never get the env fallback** — anyone can create one, so allowing it
@@ -408,7 +426,7 @@ repos (`CLAUDE.md`/`.claude`, `.cursorrules`/`.cursor/rules`, `.aider.conf.yml`,
 share of repos with any config × 40. Rules:
 
 - **It is not in `overall`.** It's shown on the developer page and as a chip on fit
-  results, and passed to Gemini call #2 as context. Putting it in the ranking would
+  results, and passed to model call #2 as context. Putting it in the ranking would
   be a scoring change: a weight, a `SCORING_VERSION` bump, and a conscious decision.
 - **Tier floors live only in `AI_FLUENCY_TIERS`** (config.ts). Import them; OMAV's
   tiers drifted across three files.
@@ -465,7 +483,7 @@ in-memory collection stand-in; keep it passing when touching these modules.
 ## Outreach drafts
 
 `POST /api/outreach { analysisId, developerId, tone }` →
-[src/lib/outreach.ts](src/lib/outreach.ts) asks Gemini for a first-contact email
+[src/lib/outreach.ts](src/lib/outreach.ts) asks the user's AI model for a first-contact email
 `{ subject, body }`. **Drafts only: DevFit sends nothing.** The PM edits, then copies,
 opens a `mailto:` link, or saves it to their notes. Rules:
 
@@ -506,15 +524,15 @@ it would make scores shift whenever Google changes the embedding model).
   sides follow; never re-declare it locally. (`FitRanking`, the old dead copy, is
   gone.)
 - **Public repos are cached per commit SHA** ([db/repoCache.ts](src/lib/db/repoCache.ts),
-  7-day TTL): the digest, and Gemini's requirement keyed by SHA + `GEMINI_MODEL` +
-  `REQUIREMENT_PROMPT_VERSION`. A requirement hit skips the file reads *and* Gemini
-  call #1, which also makes repeat runs on one commit reproducible. Three rules:
+  7-day TTL): the digest, and the model's requirement keyed by SHA +
+  `provider/model` + `REQUIREMENT_PROMPT_VERSION`. A requirement hit skips the file
+  reads *and* model call #1, which also makes repeat runs on one commit reproducible. Three rules:
   - **Bump `REQUIREMENT_PROMPT_VERSION`** in config.ts whenever the analyzeRepo
     prompt changes, or the old prompt's answers keep being served for a week.
   - **Private repos are never cached.** The key has no user in it, so a cached
     private digest would be served to anyone pasting the same URL. `getRepoHead()`
     treats a missing `private` flag as private.
-  - Only a complete Gemini reply (`isCacheableReply()`) is cached; one that only
+  - Only a complete model reply (`isCacheableReply()`) is cached; one that only
     survived through schema defaults is not pinned. Cache errors are logged and
     treated as misses, never as failed requests.
 - Digest files are read **5 at a time** (`mapInBatches`) at the head SHA, not the
@@ -522,8 +540,8 @@ it would make scores shift whenever Google changes the embedding model).
   of this repo from ~10.7s to ~2.9s.
 - `FitView` fetches `/api/developers` separately from `/api/fit` purely to get names
   and archetypes for display; the fit response carries IDs only.
-- Gemini JSON parsing retries **once** with a stricter "return only JSON" reminder
-  (`geminiJSON()`). The reply is then run through a lenient schema
+- Model JSON parsing retries **once** with a stricter "return only JSON" reminder
+  (`llmJSON()`). The reply is then run through a lenient schema
   (`coerceRequirement()` / `coerceExplanations()` in the analyzer), so a malformed
   model response degrades to defaults rather than 500s.
 
@@ -596,7 +614,8 @@ stylesheet may not have loaded by the time it renders.
   `src/components/*` client components: `AppShell`, `ThemeToggle`, `FitView`,
   `DeveloperBrowser`, `RepoPicker`, `KeyManager`, `AdminUserTable`, `LoginForm`,
   `RegisterForm`, `AuthButtons`, `AdminDevelopers`, `DeveloperWorkspace`, `ShortlistButton`,
-  `ShortlistsManager`, `OutreachButton`. Pages fetch and guard, clients render and mutate — `/fit`
+  `ShortlistsManager`, `OutreachButton`, `AiModelSettings` (in `ModelPicker.tsx`; the
+  picker is a native `<dialog>`). Pages fetch and guard, clients render and mutate — `/fit`
   follows this too (the form is `FitView`). `Logo`, `ArchetypeBadge`,
   `VerdictBadge`, `SubScoreBar`, `DeveloperCard` and `FullScreenLoader` are
   server components; keep them that way (`Logo` avoids `useId()` for exactly
@@ -617,7 +636,7 @@ stylesheet may not have loaded by the time it renders.
   with `{ error }` set to the schema's message (those messages are shown to users,
   so write them for people). Errors are `{ error: string }` with a 4xx/5xx.
   **Model output gets the opposite treatment:** every field `.catch()`es to a
-  default, because a bad Gemini reply must degrade, not fail.
+  default, because a bad model reply must degrade, not fail.
   Errors matching `/^GitHub 4\d\d/` map to 400, everything else to 500.
 - Keep the disclaimer in the UI. Commit counts and language overlap are proxies for
   skill, not proof of it; the app is decision support for a human, not a pass/fail

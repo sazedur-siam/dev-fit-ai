@@ -6,7 +6,7 @@ vi.mock("@/lib/github", async (importOriginal) => ({
   getRepoHead: vi.fn(),
   buildRepoDigest: vi.fn(),
 }));
-vi.mock("@/lib/gemini", () => ({ geminiJSON: vi.fn() }));
+vi.mock("@/lib/llm", () => ({ llmJSON: vi.fn() }));
 vi.mock("@/lib/db/repoCache", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/db/repoCache")>()),
   getCachedDigest: vi.fn(),
@@ -16,14 +16,14 @@ vi.mock("@/lib/db/repoCache", async (importOriginal) => ({
 }));
 
 const github = await import("@/lib/github");
-const gemini = await import("@/lib/gemini");
+const llm = await import("@/lib/llm");
 const cache = await import("@/lib/db/repoCache");
 const { analyzeRepo } = await import("@/lib/analyzer");
 
 const creds = {
-  geminiApiKey: "k",
+  llm: { provider: "anthropic", model: "claude-test", apiKey: "k" },
+  llmSource: "user",
   githubToken: "t",
-  geminiSource: "user",
   githubSource: "user",
 } as const;
 
@@ -54,7 +54,7 @@ const goodReply = {
 
 beforeEach(() => {
   vi.mocked(github.buildRepoDigest).mockReset().mockResolvedValue(digest);
-  vi.mocked(gemini.geminiJSON).mockReset().mockResolvedValue(goodReply);
+  vi.mocked(llm.llmJSON).mockReset().mockResolvedValue(goodReply);
   vi.mocked(cache.getCachedDigest).mockReset().mockResolvedValue(null);
   vi.mocked(cache.getCachedRequirement).mockReset().mockResolvedValue(null);
   vi.mocked(cache.saveDigest).mockReset().mockResolvedValue();
@@ -62,19 +62,29 @@ beforeEach(() => {
 });
 
 describe("analyzeRepo caching", () => {
-  it("cold public repo: builds, asks Gemini once, saves both caches", async () => {
+  it("cold public repo: builds, asks the model once, saves both caches", async () => {
     vi.mocked(github.getRepoHead).mockResolvedValue(head(false));
     const out = await analyzeRepo("https://github.com/Acme/Shop", creds);
 
     expect(out.requirement.primaryArchetypeNeeded).toBe("frontend");
     expect(out.digestMeta).toEqual({ owner: "Acme", repo: "Shop", fileCount: 7 });
     expect(github.buildRepoDigest).toHaveBeenCalledOnce();
-    expect(gemini.geminiJSON).toHaveBeenCalledOnce();
+    expect(llm.llmJSON).toHaveBeenCalledOnce();
     expect(cache.saveDigest).toHaveBeenCalledWith("acme/shop@abc123", digest);
     expect(cache.saveRequirement).toHaveBeenCalledOnce();
   });
 
-  it("requirement hit: skips the digest and Gemini entirely", async () => {
+  it("keys the requirement by provider + model, and calls the chosen model", async () => {
+    vi.mocked(github.getRepoHead).mockResolvedValue(head(false));
+    await analyzeRepo("https://github.com/Acme/Shop", creds);
+
+    expect(cache.getCachedRequirement).toHaveBeenCalledWith(
+      expect.stringContaining("|anthropic/claude-test|")
+    );
+    expect(llm.llmJSON).toHaveBeenCalledWith(expect.any(String), creds.llm);
+  });
+
+  it("requirement hit: skips the digest and the model entirely", async () => {
     vi.mocked(github.getRepoHead).mockResolvedValue(head(false));
     vi.mocked(cache.getCachedRequirement).mockResolvedValue({
       requirement: { ...goodReply, primaryArchetypeNeeded: "backend" } as never,
@@ -85,16 +95,16 @@ describe("analyzeRepo caching", () => {
     expect(out.requirement.primaryArchetypeNeeded).toBe("backend");
     expect(out.digestMeta.fileCount).toBe(3);
     expect(github.buildRepoDigest).not.toHaveBeenCalled();
-    expect(gemini.geminiJSON).not.toHaveBeenCalled();
+    expect(llm.llmJSON).not.toHaveBeenCalled();
   });
 
-  it("digest hit: reuses the digest but still asks Gemini", async () => {
+  it("digest hit: reuses the digest but still asks the model", async () => {
     vi.mocked(github.getRepoHead).mockResolvedValue(head(false));
     vi.mocked(cache.getCachedDigest).mockResolvedValue(digest);
     await analyzeRepo("github.com/acme/shop", creds);
 
     expect(github.buildRepoDigest).not.toHaveBeenCalled();
-    expect(gemini.geminiJSON).toHaveBeenCalledOnce();
+    expect(llm.llmJSON).toHaveBeenCalledOnce();
   });
 
   it("private repo: never reads or writes the cache", async () => {
@@ -119,9 +129,9 @@ describe("analyzeRepo caching", () => {
     expect(out.requirement.languages).toEqual(["TypeScript"]);
   });
 
-  it("does not cache a degraded Gemini reply", async () => {
+  it("does not cache a degraded model reply", async () => {
     vi.mocked(github.getRepoHead).mockResolvedValue(head(false));
-    vi.mocked(gemini.geminiJSON).mockResolvedValue({ stack: [] });
+    vi.mocked(llm.llmJSON).mockResolvedValue({ stack: [] });
     const out = await analyzeRepo("github.com/acme/shop", creds);
 
     expect(out.requirement.primaryArchetypeNeeded).toBe("fullstack"); // default
