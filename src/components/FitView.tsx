@@ -16,14 +16,17 @@ function isValidRepoUrl(input: string): boolean {
 }
 
 export function FitView({
+  initialRepoUrl = "",
   hasGeminiKey,
   serverKeyAllowed,
 }: {
+  /** Pre-filled repo URL, from `/fit?repo=`. */
+  initialRepoUrl?: string;
   hasGeminiKey: boolean;
   /** False for self-registered accounts, which never use the server's key. */
   serverKeyAllowed: boolean;
 }) {
-  const [repoUrl, setRepoUrl] = useState("");
+  const [repoUrl, setRepoUrl] = useState(initialRepoUrl);
   const [state, setState] = useState<
     | { kind: "idle" }
     | { kind: "loading"; message: string }

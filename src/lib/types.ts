@@ -105,6 +105,8 @@ export interface StoredAnalysis {
   ranked: FitScore[];
   topPickId: string;
   topPickRationale: string;
+  /** `SCORING_VERSION` when it was scored; `"0"` for analyses saved before versioning. */
+  scoringVersion: string;
   createdAt: string;
 }
 
@@ -179,6 +181,8 @@ export interface FitResponse {
   topPickRationale: string;
   /** Null when saving to history failed; the ranking is still returned. */
   analysisId: string | null;
+  /** The `SCORING_VERSION` these scores were computed with. */
+  scoringVersion: string;
   credentialSources: { gemini: CredentialSource; github: CredentialSource };
 }
 
