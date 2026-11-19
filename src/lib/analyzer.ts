@@ -11,13 +11,18 @@ import {
 import { geminiJSON } from "@/lib/gemini";
 import type {
   AnalyzeAndRankResult,
+  ClarifyingQuestion,
   DeveloperView,
   FitScore,
   GeminiExplanationResponse,
   RepoRequirement,
 } from "@/lib/types";
 import { rankCohort } from "@/lib/scoring";
-import { ExplanationResponseSchema, RawRequirementSchema } from "@/lib/schemas";
+import {
+  ExplanationResponseSchema,
+  NeedQuestionsSchema,
+  RawRequirementSchema,
+} from "@/lib/schemas";
 import type { ResolvedCredentials } from "@/lib/credentials";
 
 function fallbackLanguagesFromBytes(bytes: Record<string, number>): string[] {
@@ -34,7 +39,7 @@ function fallbackLanguagesFromBytes(bytes: Record<string, number>): string[] {
  */
 export function coerceRequirement(
   raw: unknown,
-  ctx: { languageBytes: Record<string, number>; repoLabel: string }
+  ctx: { languageBytes: Record<string, number>; repoLabel: string; fallbackSummary?: string }
 ): RepoRequirement {
   const parsed = RawRequirementSchema.parse(raw);
   return {
@@ -43,7 +48,7 @@ export function coerceRequirement(
       parsed.languages.length > 0
         ? parsed.languages
         : fallbackLanguagesFromBytes(ctx.languageBytes),
-    summary: parsed.summary || `Repository ${ctx.repoLabel}.`,
+    summary: parsed.summary || ctx.fallbackSummary || `Repository ${ctx.repoLabel}.`,
   };
 }
 
@@ -252,13 +257,15 @@ Rules:
   return coerceExplanations(raw, ranked);
 }
 
-/** End-to-end: repoUrl → RepoRequirement + ranked FitScore[] + topPickId. */
-export async function analyzeAndRank(
-  repoUrl: string,
+/**
+ * Rank the cohort against a requirement and narrate it. Shared by both entry
+ * points (a repo URL, a described need), so ranking has exactly one code path.
+ */
+export async function rankAndExplain(
+  requirement: RepoRequirement,
   cohort: DeveloperView[],
   creds: ResolvedCredentials
-): Promise<AnalyzeAndRankResult> {
-  const { requirement, digestMeta } = await analyzeRepo(repoUrl, creds);
+): Promise<Omit<AnalyzeAndRankResult, "digestMeta">> {
   const rankedBase = rankCohort(cohort, requirement);
   const { explanations, topPickRationale } = await explainRanking(
     requirement,
@@ -267,17 +274,93 @@ export async function analyzeAndRank(
     creds
   );
   const explanationMap = new Map(explanations.map((e) => [e.devId, e.explanation]));
-
   const ranked: FitScore[] = rankedBase.map((r) => ({
     ...r,
     explanation: explanationMap.get(r.devId) || "",
   }));
-
   return {
     requirement,
     ranked,
     topPickId: ranked[0]?.devId ?? "",
     topPickRationale,
-    digestMeta,
+  };
+}
+
+/** End-to-end: repoUrl → RepoRequirement + ranked FitScore[] + topPickId. */
+export async function analyzeAndRank(
+  repoUrl: string,
+  cohort: DeveloperView[],
+  creds: ResolvedCredentials
+): Promise<AnalyzeAndRankResult> {
+  const { requirement, digestMeta } = await analyzeRepo(repoUrl, creds);
+  return { ...(await rankAndExplain(requirement, cohort, creds)), digestMeta };
+}
+
+/**
+ * A PM's plain-text description of a need → the same RepoRequirement a repo
+ * produces, so everything after it (ranking, explanations, history) is shared.
+ *
+ * When `allowQuestions` is true and the model finds something essential missing,
+ * it returns up to 3 multiple-choice questions instead. The follow-up call (with
+ * answers, or after "skip") passes false, and any questions it still returns are
+ * ignored, so a PM is asked at most once.
+ */
+export async function parseNeed(
+  text: string,
+  answers: { question: string; answer: string }[],
+  allowQuestions: boolean,
+  creds: ResolvedCredentials
+): Promise<
+  | { status: "clarify"; questions: ClarifyingQuestion[] }
+  | { status: "ready"; requirement: RepoRequirement }
+> {
+  const answerBlock =
+    answers.length > 0
+      ? `\nThe PM answered these follow-up questions:\n${answers
+          .map((a) => `- ${a.question} → ${a.answer}`)
+          .join("\n")}\n`
+      : "";
+
+  const questionRule = allowQuestions
+    ? `- If something ESSENTIAL is missing (whether it's frontend, backend or both; or which language/framework), add up to 3 short multiple-choice "questions", each with 2–4 concrete "options". Ask nothing you can reasonably infer. If the description is clear enough, return "questions": [].`
+    : `- Do NOT ask questions. Return "questions": [] and make your best reasonable inference.`;
+
+  const prompt = `You are a senior tech lead. A project manager described the developer they need, in their own words. Turn it into a structured requirement.
+
+Description:
+"""
+${text}
+"""
+${answerBlock}
+Return STRICTLY this JSON shape (no prose, no fences):
+{
+  "stack": string[],                     // frameworks, libraries, platforms by SHORT common name (e.g. "Next.js", "Django REST Framework", "Magento") — no versions
+  "languages": string[],                 // programming languages, most important first
+  "primaryArchetypeNeeded": "frontend" | "backend" | "fullstack",
+  "domain": string,                      // one line: the business/technical domain
+  "complexity": "low" | "moderate" | "high",
+  "summary": string,                     // 2–3 sentences restating the need precisely
+  "questions": [ { "id": string, "question": string, "options": string[] } ]
+}
+
+Rules:
+- Only include languages and frameworks the description states or clearly implies. Prefer omitting to guessing.
+- Put programming languages in "languages", not in "stack".
+${questionRule}
+- Return valid JSON only.`;
+
+  const raw = await geminiJSON<unknown>(prompt, creds.geminiApiKey);
+  const questions = allowQuestions
+    ? NeedQuestionsSchema.parse((raw as { questions?: unknown } | null)?.questions)
+    : [];
+  if (questions.length > 0) return { status: "clarify", questions };
+
+  return {
+    status: "ready",
+    requirement: coerceRequirement(raw, {
+      languageBytes: {},
+      repoLabel: "",
+      fallbackSummary: text.length > 240 ? `${text.slice(0, 237)}…` : text,
+    }),
   };
 }

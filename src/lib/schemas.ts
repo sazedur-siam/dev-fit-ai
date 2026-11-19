@@ -69,6 +69,44 @@ export const ExplanationResponseSchema = z.preprocess(
 
 // ───────────────────────── Request bodies ─────────────────────────
 
+/**
+ * Gemini's reply to a described need: requirement fields plus optional
+ * clarifying questions. Malformed questions are dropped; at most 3, each with
+ * 2–4 options.
+ */
+export const NeedQuestionsSchema = z
+  .array(z.unknown())
+  .catch([])
+  .transform((items) =>
+    items
+      .flatMap((item, i) => {
+        const q = asObject(item) as { id?: unknown; question?: unknown; options?: unknown };
+        const question = typeof q.question === "string" ? q.question.trim() : "";
+        const options = Array.isArray(q.options)
+          ? [...new Set(q.options.map((o) => String(o).trim()).filter(Boolean))].slice(0, 4)
+          : [];
+        if (!question || options.length < 2) return [];
+        const id = typeof q.id === "string" && q.id.trim() ? q.id.trim() : `q${i + 1}`;
+        return [{ id, question, options }];
+      })
+      .slice(0, 3)
+  );
+
+export const NeedBodySchema = z.object({
+  text: z
+    .string({ error: "Describe the need first." })
+    .trim()
+    .min(10, { error: "Describe the need in a sentence or two." })
+    .max(2000, { error: "Keep the description under 2,000 characters." }),
+  /** Answers to the clarifying questions, echoed back as question + chosen option. */
+  answers: z
+    .array(z.object({ question: z.string().max(300), answer: z.string().max(300) }))
+    .max(3)
+    .optional(),
+  /** True when the PM chose "skip, just search". */
+  skipQuestions: z.boolean().optional(),
+});
+
 export const RepoUrlBodySchema = z.object({
   repoUrl: z
     .string({ error: "repoUrl is required" })

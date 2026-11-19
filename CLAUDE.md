@@ -71,8 +71,22 @@ repoUrl
   → { requirement, ranked, topPickId, topPickRationale }
 ```
 
-`analyzeAndRank()` in [src/lib/analyzer.ts](src/lib/analyzer.ts) is the end-to-end
-orchestrator and the only place that composes all of the above.
+`analyzeAndRank()` in [src/lib/analyzer.ts](src/lib/analyzer.ts) is the repo
+orchestrator. The ranking half is `rankAndExplain()`, shared with the second entry
+point:
+
+```
+needText (+ answers)
+  → parseNeed()               src/lib/analyzer.ts  → Gemini #1 → RepoRequirement
+                              (or up to 3 clarifying questions, first call only)
+  → rankAndExplain()          same deterministic ranking + Gemini #2
+```
+
+`POST /api/need` runs it. Rules: a PM is asked **at most once**. The follow-up call
+(with `answers`, or `skipQuestions: true`) tells the model not to ask and ignores any
+questions it returns anyway. A described need becomes the exact `RepoRequirement`
+shape a repo does, so scoring has one code path; don't fork it. History stores
+`needText` with `repoUrl`/`owner`/`repo` null, and "Re-run" uses `/fit?need=`.
 
 ## Layout
 

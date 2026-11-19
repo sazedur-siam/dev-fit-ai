@@ -7,7 +7,14 @@ import { VerdictBadge } from "@/components/VerdictBadge";
 import { SubScoreBar } from "@/components/SubScoreBar";
 import { FullScreenLoader } from "@/components/FullScreenLoader";
 import { RepoPicker } from "@/components/RepoPicker";
-import type { DeveloperView, FitResponse } from "@/lib/types";
+import type {
+  ClarifyingQuestion,
+  DeveloperView,
+  FitResponse,
+  NeedResponse,
+} from "@/lib/types";
+
+type Mode = "repo" | "need";
 
 function isValidRepoUrl(input: string): boolean {
   return /^(?:https?:\/\/)?(?:www\.)?github\.com\/[^/\s]+\/[^/\s#?]+/i.test(
@@ -17,21 +24,28 @@ function isValidRepoUrl(input: string): boolean {
 
 export function FitView({
   initialRepoUrl = "",
+  initialNeedText = "",
   hasGeminiKey,
   serverKeyAllowed,
 }: {
   /** Pre-filled repo URL, from `/fit?repo=`. */
   initialRepoUrl?: string;
+  /** Pre-filled need description, from `/fit?need=`; opens in "describe" mode. */
+  initialNeedText?: string;
   hasGeminiKey: boolean;
   /** False for self-registered accounts, which never use the server's key. */
   serverKeyAllowed: boolean;
 }) {
+  const [mode, setMode] = useState<Mode>(initialNeedText && !initialRepoUrl ? "need" : "repo");
   const [repoUrl, setRepoUrl] = useState(initialRepoUrl);
+  const [needText, setNeedText] = useState(initialNeedText);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [state, setState] = useState<
     | { kind: "idle" }
     | { kind: "loading"; message: string }
     | { kind: "error"; message: string }
-    | { kind: "result"; data: FitResponse; developers: DeveloperView[] }
+    | { kind: "clarify"; questions: ClarifyingQuestion[] }
+    | { kind: "result"; data: FitResponse; developers: DeveloperView[]; mode: Mode }
   >({ kind: "idle" });
 
   const urlValid = useMemo(() => isValidRepoUrl(repoUrl), [repoUrl]);
@@ -64,7 +78,51 @@ export function FitView({
         kind: "result",
         data: json as FitResponse,
         developers: devsJson.developers,
+        mode: "repo",
       });
+    } catch (err) {
+      setState({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Something went wrong",
+      });
+    }
+  }
+
+  /**
+   * First call may return clarifying questions. The follow-up sends the chosen
+   * answers (or skips) and always ranks, so a PM is asked at most once.
+   */
+  async function runNeed(
+    text: string,
+    followUp?: { answers: { question: string; answer: string }[] } | { skip: true }
+  ) {
+    setState({
+      kind: "loading",
+      message: followUp ? "Ranking developers…" : "Reading the description…",
+    });
+    try {
+      const [devsJson, res] = await Promise.all([
+        fetch("/api/developers").then((r) => r.json() as Promise<{ developers: DeveloperView[] }>),
+        fetch("/api/need", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text,
+            ...(followUp && "answers" in followUp ? { answers: followUp.answers } : {}),
+            ...(followUp && "skip" in followUp ? { skipQuestions: true } : {}),
+          }),
+        }),
+      ]);
+      const json = (await res.json()) as NeedResponse | { error?: string };
+      if (!res.ok || !("status" in json)) {
+        throw new Error(("error" in json && json.error) || "Request failed");
+      }
+      if (json.status === "clarify") {
+        setAnswers({});
+        setState({ kind: "clarify", questions: json.questions });
+        return;
+      }
+      setState({ kind: "result", data: json, developers: devsJson.developers, mode: "need" });
     } catch (err) {
       setState({
         kind: "error",
@@ -75,8 +133,18 @@ export function FitView({
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    void runFit(repoUrl);
+    if (mode === "repo") void runFit(repoUrl);
+    else void runNeed(needText);
   }
+
+  function submitAnswers(questions: ClarifyingQuestion[]) {
+    const chosen = questions
+      .filter((q) => answers[q.id])
+      .map((q) => ({ question: q.question, answer: answers[q.id] }));
+    void runNeed(needText, chosen.length > 0 ? { answers: chosen } : { skip: true });
+  }
+
+  const busy = state.kind === "loading";
 
   return (
     <div>
@@ -125,45 +193,156 @@ export function FitView({
           Deterministic scoring
         </span>
         <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-heading sm:text-3xl">
-          Check fit for a repo
+          {mode === "repo" ? "Check fit for a repo" : "Describe what you need"}
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-body">
-          Paste a public GitHub repo URL. DevFit builds a digest, asks Gemini what
-          kind of developer it needs, and ranks the seeded team against it.
+          {mode === "repo"
+            ? "Paste a public GitHub repo URL. DevFit builds a digest, asks Gemini what kind of developer it needs, and ranks the team against it."
+            : "No repo yet? Describe the project or role in plain words. Gemini turns it into a requirement (asking up to 3 quick questions if something essential is missing), then the team is ranked the same way."}{" "}
           Scoring is deterministic — the AI narrates, it doesn&rsquo;t re-rank.
         </p>
 
-        <form onSubmit={submit} className="mt-6 flex flex-col gap-3 sm:flex-row">
-          <input
-            type="url"
-            placeholder="https://github.com/owner/repo"
-            value={repoUrl}
-            onChange={(e) => setRepoUrl(e.target.value)}
-            className="flex-1 rounded-lg border border-line bg-surface px-3.5 py-2.5 text-sm text-heading placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-line"
-            required
-          />
-          <button
-            type="submit"
-            disabled={state.kind === "loading"}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-accent-contrast shadow-brand transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
-          >
-            {state.kind === "loading" ? "Working…" : "Analyse & rank"}
-          </button>
-        </form>
+        <div
+          role="tablist"
+          aria-label="How to describe the work"
+          className="mt-5 inline-flex rounded-lg border border-line bg-surface-2 p-1 text-xs font-bold"
+        >
+          {(["repo", "need"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="tab"
+              aria-selected={mode === m}
+              disabled={busy}
+              onClick={() => {
+                setMode(m);
+                if (state.kind === "clarify" || state.kind === "error") setState({ kind: "idle" });
+              }}
+              className={`rounded-md px-3 py-1.5 transition ${
+                mode === m ? "bg-surface text-heading shadow-card" : "text-muted hover:text-heading"
+              }`}
+            >
+              {m === "repo" ? "From a repo" : "Describe the need"}
+            </button>
+          ))}
+        </div>
 
-        {repoUrl && !urlValid && (
-          <p className="mt-2 text-xs font-medium text-danger-fg">
-            Doesn&rsquo;t look like a GitHub repo URL yet.
-          </p>
+        {mode === "repo" ? (
+          <>
+            <form onSubmit={submit} className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <input
+                type="url"
+                placeholder="https://github.com/owner/repo"
+                value={repoUrl}
+                onChange={(e) => setRepoUrl(e.target.value)}
+                className="flex-1 rounded-lg border border-line bg-surface px-3.5 py-2.5 text-sm text-heading placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-line"
+                required
+              />
+              <button
+                type="submit"
+                disabled={busy}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-accent-contrast shadow-brand transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
+              >
+                {busy ? "Working…" : "Analyse & rank"}
+              </button>
+            </form>
+
+            {repoUrl && !urlValid && (
+              <p className="mt-2 text-xs font-medium text-danger-fg">
+                Doesn&rsquo;t look like a GitHub repo URL yet.
+              </p>
+            )}
+
+            <RepoPicker onSelect={setRepoUrl} disabled={busy} />
+          </>
+        ) : (
+          <form onSubmit={submit} className="mt-4">
+            <textarea
+              value={needText}
+              onChange={(e) => setNeedText(e.target.value)}
+              rows={4}
+              maxLength={2000}
+              required
+              placeholder="e.g. A Magento 2 store needs a B2B pricing module and an ERP sync. Someone strong in PHP who's done Magento plugins before."
+              className="w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-sm leading-relaxed text-heading placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-line"
+            />
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <span className="text-xs text-muted tabular-nums">{needText.length} / 2000</span>
+              <button
+                type="submit"
+                disabled={busy || needText.trim().length < 10}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-accent-contrast shadow-brand transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
+              >
+                {busy ? "Working…" : "Find the right developer"}
+              </button>
+            </div>
+          </form>
         )}
-
-        <RepoPicker onSelect={setRepoUrl} disabled={state.kind === "loading"} />
       </section>
+
+      {state.kind === "clarify" && (
+        <section className="mt-6 rounded-2xl border border-accent-line bg-surface p-6 shadow-card">
+          <h2 className="text-lg font-bold text-heading">A few quick questions</h2>
+          <p className="mt-1 text-sm text-body">
+            The description left something open. Pick what fits, or skip and DevFit will
+            make its best guess.
+          </p>
+          <div className="mt-5 space-y-5">
+            {state.questions.map((q) => (
+              <fieldset key={q.id}>
+                <legend className="text-sm font-semibold text-heading">{q.question}</legend>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {q.options.map((opt) => {
+                    const selected = answers[q.id] === opt;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() =>
+                          setAnswers((a) => ({ ...a, [q.id]: selected ? "" : opt }))
+                        }
+                        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                          selected
+                            ? "border-accent bg-accent-soft text-accent-soft-fg"
+                            : "border-line text-body hover:border-accent hover:text-heading"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            ))}
+          </div>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => submitAnswers(state.questions)}
+              className="inline-flex items-center rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-accent-contrast shadow-brand transition hover:bg-accent-hover"
+            >
+              Rank developers
+            </button>
+            <button
+              type="button"
+              onClick={() => void runNeed(needText, { skip: true })}
+              className="inline-flex items-center rounded-lg border border-line px-4 py-2.5 text-sm font-semibold text-body transition hover:text-heading"
+            >
+              Skip, just search
+            </button>
+          </div>
+        </section>
+      )}
 
       {state.kind === "loading" && (
         <FullScreenLoader
           message={state.message}
-          hint="Fetching the repo tree and up to 20 key files, then two Gemini calls. Usually 5–30 seconds."
+          hint={
+            mode === "repo"
+              ? "Fetching the repo tree and up to 20 key files, then two Gemini calls. Usually 5–30 seconds."
+              : "One or two Gemini calls. Usually 5–15 seconds."
+          }
         />
       )}
 
@@ -174,14 +353,28 @@ export function FitView({
             {state.message}
           </div>
           <div className="mt-2 text-xs text-body">
-            Common causes: missing <code>GEMINI_API_KEY</code>, GitHub rate-limit
-            hit (add <code>GITHUB_TOKEN</code>), or a private/deleted repo.
+            {mode === "repo" ? (
+              <>
+                Common causes: missing <code>GEMINI_API_KEY</code>, GitHub rate-limit hit
+                (add <code>GITHUB_TOKEN</code>), or a private/deleted repo.
+              </>
+            ) : (
+              <>
+                Common causes: missing <code>GEMINI_API_KEY</code>, or the Gemini quota
+                is used up for now.
+              </>
+            )}
           </div>
         </div>
       )}
 
       {state.kind === "result" && (
-        <FitResultView data={state.data} developers={state.developers} />
+        <FitResultView
+          data={state.data}
+          developers={state.developers}
+          heading={state.mode === "repo" ? "Repo requirement" : "What the work needs"}
+          topLabel={state.mode === "repo" ? "Fittest for this repo" : "Fittest for this need"}
+        />
       )}
     </div>
   );
@@ -207,9 +400,13 @@ function Field({
 function FitResultView({
   data,
   developers,
+  heading,
+  topLabel,
 }: {
   data: FitResponse;
   developers: DeveloperView[];
+  heading: string;
+  topLabel: string;
 }) {
   const devById = new Map(developers.map((d) => [d.id, d]));
   const topPick = data.ranked.find((r) => r.devId === data.topPickId);
@@ -217,7 +414,7 @@ function FitResultView({
   return (
     <>
       <section className="mt-6 rounded-2xl border border-line bg-surface p-6 shadow-card">
-        <h2 className="text-lg font-bold text-heading">Repo requirement</h2>
+        <h2 className="text-lg font-bold text-heading">{heading}</h2>
         <p className="mt-1.5 text-sm leading-relaxed text-body">
           {data.requirement.summary}
         </p>
@@ -259,7 +456,7 @@ function FitResultView({
           />
           <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-accent-soft-fg">
             <span className="inline-block h-2 w-2 rounded-full bg-accent" />
-            Fittest for this repo
+            {topLabel}
           </div>
           <div className="mt-3 flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <div>

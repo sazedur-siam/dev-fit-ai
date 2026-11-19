@@ -98,9 +98,12 @@ export interface KeyStatus {
 /** A persisted fit run, for the user's own history. */
 export interface StoredAnalysis {
   id: string;
-  repoUrl: string;
-  owner: string;
-  repo: string;
+  /** Null for a run started from a described need rather than a repo. */
+  repoUrl: string | null;
+  owner: string | null;
+  repo: string | null;
+  /** The PM's description, for runs started from text. */
+  needText: string | null;
   requirement: RepoRequirement;
   ranked: FitScore[];
   topPickId: string;
@@ -212,6 +215,18 @@ export interface AnalyzeAndRankResult {
   topPickRationale: string;
   digestMeta: { owner: string; repo: string; fileCount: number };
 }
+
+/** A multiple-choice follow-up asked when a described need is too vague. */
+export interface ClarifyingQuestion {
+  id: string;
+  question: string;
+  options: string[];
+}
+
+/** `/api/need`: either questions to answer first, or a ranking shaped like /api/fit's. */
+export type NeedResponse =
+  | { status: "clarify"; questions: ClarifyingQuestion[] }
+  | ({ status: "ready" } & FitResponse);
 
 /**
  * The `/api/fit` response body. This is the **only** declaration of that

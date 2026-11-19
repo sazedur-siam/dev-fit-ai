@@ -135,6 +135,12 @@ can [register](#accounts-login-register) their own account instead.
   languages, stack), a highlighted top pick, and the full ranking with per-developer
   sub-score bars, verdict badges and AI explanations.
 
+### Describe the need (`/fit`, second tab)
+No repo yet? Describe the project or role in plain words. Gemini turns it into the
+same requirement a repo produces; if something essential is missing it asks up to
+three multiple-choice questions, once, with a "skip, just search" option. Ranking,
+explanations and history work exactly as for a repo.
+
 ### Developer detail (`/developer/[id]`)
 - Contribution totals, per-repository commit/addition/deletion breakdown and
   recent commit messages, read from MongoDB.
@@ -494,6 +500,7 @@ capped at 15 KB so the prompt stays inside the model's context.
 | --- | --- | --- |
 | `POST /api/register { email, password, confirmPassword }` | `201 { user }`; `409` if the email is taken | Public |
 | `POST /api/analyze { repoUrl }` | `{ requirement, digestMeta }` | Signed in |
+| `POST /api/need { text, answers?, skipQuestions? }` | `{ status: "clarify", questions }` or `{ status: "ready", …same as /api/fit }` | Signed in |
 | `POST /api/fit { repoUrl }` | `{ requirement, ranked, topPickId, topPickRationale, analysisId, credentialSources }` | Signed in |
 | `GET /api/developers` | `{ developers }` | Signed in |
 | `GET /api/repos` | `{ login, repos, tokenSource }` | Signed in |

@@ -5,9 +5,11 @@ import type { FitScore, RepoRequirement, StoredAnalysis } from "@/lib/types";
 
 interface AnalysisDoc {
   userId: string;
-  repoUrl: string;
-  owner: string;
-  repo: string;
+  repoUrl: string | null;
+  owner: string | null;
+  repo: string | null;
+  /** Set for runs started from a described need; absent on older documents. */
+  needText?: string | null;
   requirement: RepoRequirement;
   ranked: FitScore[];
   topPickId: string;
@@ -27,6 +29,7 @@ function toStored(doc: WithId<AnalysisDoc>): StoredAnalysis {
     repoUrl: doc.repoUrl,
     owner: doc.owner,
     repo: doc.repo,
+    needText: doc.needText ?? null,
     requirement: doc.requirement,
     ranked: doc.ranked,
     topPickId: doc.topPickId,
