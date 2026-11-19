@@ -210,7 +210,11 @@ export function buildDeveloper(
 
 // ───────────────────────── Network ─────────────────────────
 
-async function graphql<T>(
+/**
+ * POST one GraphQL query. Throws `GitHub 4xx — …` for request errors so routes can
+ * map them to a 400. Shared with githubInsights.ts so rate-limit tracking stays here.
+ */
+export async function githubGraphql<T>(
   query: string,
   variables: Record<string, unknown>,
   token: string
@@ -317,10 +321,10 @@ export async function fetchGithubDeveloper(
     throw new Error(`GitHub 400 — "${login}" isn't a valid GitHub username`);
   }
 
-  const { user } = await graphql<{ user: GhUser | null }>(USER_QUERY, { login }, token);
+  const { user } = await githubGraphql<{ user: GhUser | null }>(USER_QUERY, { login }, token);
   if (!user) throw new Error(`GitHub 404 — no GitHub user named "${login}"`);
 
-  const reposData = await graphql<{ user: { repositories: { nodes: GhRepo[] } } }>(
+  const reposData = await githubGraphql<{ user: { repositories: { nodes: GhRepo[] } } }>(
     REPOS_QUERY,
     { login: user.login, authorId: user.id },
     token
@@ -341,7 +345,7 @@ export async function fetchGithubDeveloper(
   if (top.length > 0) {
     const variables: Record<string, string> = { owner: user.login };
     top.forEach((r, i) => (variables[`r${i}`] = r.name));
-    const data = await graphql<Record<string, Record<string, BlobField> | null>>(
+    const data = await githubGraphql<Record<string, Record<string, BlobField> | null>>(
       manifestQuery(top.length),
       variables,
       token

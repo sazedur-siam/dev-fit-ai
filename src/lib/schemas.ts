@@ -183,21 +183,26 @@ export const AdminCreateUserBodySchema = z.object({
       | "project_manager"),
 });
 
+/** Accepts "octocat", "@octocat", or a profile URL with or without the scheme. */
+export const GithubLoginSchema = z
+  .string({ error: "GitHub username is required" })
+  .trim()
+  .min(1, { error: "GitHub username is required" })
+  .transform((l) =>
+    l
+      .replace(/^@/, "")
+      .replace(/^(https?:\/\/)?(www\.)?github\.com\//i, "")
+      .replace(/[/?#].*$/, "")
+  );
+
 export const ImportDeveloperBodySchema = z.object({
-  login: z
-    .string({ error: "GitHub username is required" })
-    .trim()
-    .min(1, { error: "GitHub username is required" })
-    // Accept "octocat", "@octocat", or a profile URL with or without the scheme.
-    .transform((l) =>
-      l
-        .replace(/^@/, "")
-        .replace(/^(https?:\/\/)?(www\.)?github\.com\//i, "")
-        .replace(/\/.*$/, "")
-    ),
+  login: GithubLoginSchema,
   /** Omitted or "auto": guess from the languages and frameworks found. */
   archetype: z.enum(["auto", "frontend", "backend", "fullstack"]).optional().catch("auto"),
 });
+
+/** POST /api/profiles: analyze one GitHub account. */
+export const ProfileAnalyzeBodySchema = z.object({ login: GithubLoginSchema });
 
 // ───────────────────────── Workspace ─────────────────────────
 

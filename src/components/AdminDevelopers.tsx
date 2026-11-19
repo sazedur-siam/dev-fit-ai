@@ -15,6 +15,8 @@ export interface AdminDeveloperRow {
   importedAt: string | null;
   repoCount: number;
   totalCommits: number;
+  /** Display name of whoever added them, when recorded. */
+  addedBy: string | null;
 }
 
 const FIELD_CLASS =
@@ -74,6 +76,8 @@ export function AdminDevelopers({
         importedAt: dev.importedAt ?? null,
         repoCount: dev.repos.length,
         totalCommits: dev.totalCommits,
+        // A re-import keeps the original adder; a new one is this admin.
+        addedBy: rows.find((r) => r.id === dev.id)?.addedBy ?? "you",
       };
       setRows((prev) => [row, ...prev.filter((r) => r.id !== row.id)]);
       setNotice(
@@ -223,6 +227,9 @@ export function AdminDevelopers({
                   <SourceBadge source={r.source} />
                   {r.importedAt && (
                     <div className="mt-1 text-[11px] text-muted">{r.importedAt.slice(0, 10)}</div>
+                  )}
+                  {r.addedBy && (
+                    <div className="mt-0.5 text-[11px] text-muted">by {r.addedBy}</div>
                   )}
                 </td>
                 <td className="px-4 py-3 capitalize text-body">{r.archetype}</td>

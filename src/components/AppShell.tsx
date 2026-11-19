@@ -64,6 +64,18 @@ const NAV: NavItem[] = [
     ),
   },
   {
+    href: "/profiles",
+    label: "Profile Analyzer",
+    icon: icon(
+      <>
+        <circle cx="9" cy="8" r="3.5" />
+        <path d="M2.5 20v-1a5 5 0 0 1 5-5h3" />
+        <circle cx="16.5" cy="16.5" r="3.5" />
+        <path d="M19 19l2.5 2.5" />
+      </>
+    ),
+  },
+  {
     href: "/history",
     label: "History",
     icon: icon(

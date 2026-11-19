@@ -103,7 +103,7 @@ shape a repo does, so scoring has one code path; don't fork it. History stores
 | [src/lib/rateLimit.ts](src/lib/rateLimit.ts) | Login/register throttling policy; storage in `db/rateLimits.ts`. |
 | [src/lib/credentials.ts](src/lib/credentials.ts) | Resolves which key a request uses (user → env). |
 | [src/lib/mongodb.ts](src/lib/mongodb.ts) | Cached client + collection names. |
-| [src/lib/db/](src/lib/db/) | One module per collection: `users`, `keys`, `developers`, `analyses`, `rateLimits`, `repoCache`, `refreshRuns`, `notes`, `tags`, `shortlists`. |
+| [src/lib/db/](src/lib/db/) | One module per collection: `users`, `keys`, `developers`, `analyses`, `rateLimits`, `repoCache`, `refreshRuns`, `notes`, `tags`, `shortlists`, `profileReports`. |
 | [src/lib/config.ts](src/lib/config.ts) | Weights, thresholds, digest limits, model name. Tunable during a demo. |
 | [src/lib/scoring.ts](src/lib/scoring.ts) | Pure sub-scores + ranking. No I/O, no AI. |
 | [src/lib/github.ts](src/lib/github.ts) | Repo digest builder + URL parsing. |
@@ -114,6 +114,7 @@ shape a repo does, so scoring has one code path; don't fork it. History stores
 | [src/lib/developerHelpers.ts](src/lib/developerHelpers.ts) | `MockDeveloper` → `DeveloperView` (derives `languages`, `netLines`). |
 | [src/data/developers.ts](src/data/developers.ts) | 10 seeded sample developers: 4 frontend, 3 backend, 3 fullstack. |
 | [src/lib/githubProfile.ts](src/lib/githubProfile.ts) | Builds a developer from public GitHub activity (admin import). No Next imports. |
+| [src/lib/githubInsights.ts](src/lib/githubInsights.ts) | Profile Analyzer's GitHub data: identity, activity calendar, outside PRs, repo details. No Next imports. |
 | [src/lib/frameworkDetect.ts](src/lib/frameworkDetect.ts) | Dependency manifest → frameworks table (package.json, requirements, composer, …). |
 | [src/app/api/](src/app/api/) | Route handlers, all `runtime = "nodejs"`. |
 | [src/components/](src/components/) | Mostly presentational; the `"use client"` ones are listed under Conventions. |
@@ -480,6 +481,48 @@ in-memory collection stand-in; keep it passing when touching these modules.
 - UI: `DeveloperWorkspace` on `/developer/[id]`, `ShortlistButton` on fit results
   (a new list there records the `analysisId`), `ShortlistsManager` on `/shortlists`.
 
+## GitHub Profile Analyzer
+
+`/profiles` (any signed-in user): paste a username or profile URL → a private report
+on `/profiles/[id]`; "Add to developer pool" puts the person in the shared cohort,
+after which shortlists, notes, tags and fit rankings work as for any imported developer.
+
+```
+POST /api/profiles { login }
+  → fetchGithubDeveloper()   src/lib/githubProfile.ts   3 GraphQL calls (the import, unchanged)
+  ∥ fetchProfileInsights()   src/lib/githubInsights.ts  1 GraphQL call, ~1.5–4s, in parallel
+  → summarizeProfile()       src/lib/profileSummary.ts  1 model call, optional
+  → saveProfileReport()      src/lib/db/profileReports.ts
+POST /api/profiles/[id]/pool → poolDecision() (src/lib/profilePool.ts) → upsertDeveloper()
+```
+
+Measured: ~4s for `octocat`, ~12s for `sindresorhus`. Nearly all of it is GitHub;
+the processing is milliseconds.
+
+- **Project managers can add to the pool**, not just admins (a product decision).
+  `POST /api/admin/developers` is still admin-only. Adding shifts the cohort-relative
+  `experienceDepth` for everyone, as any import does; no `SCORING_VERSION` bump,
+  because no formula changed.
+- **Pooling keeps what people decided**: an existing archetype (it may be hand-set)
+  and the original `addedBy`, and never replaces a newer pool document with an
+  older report. Refresh and the admin import keep `addedBy` too; `/admin` shows it.
+- **Reports are private** like notes: every query filters by `userId`, one report per
+  (user, lowercased login), re-analyzing replaces it, `deleteUser()` removes them.
+  Cross-user cases are in [workspace.test.ts](src/lib/workspace.test.ts).
+- **The repo-detail fields live in the profile query, not the import's repos query.**
+  Widening that query (it samples commits; refresh shares it) would slow both down.
+  Same selection and order (15 most recently pushed own repos), joined by name.
+- **Private repositories are never named.** The query runs with the requester's token,
+  which can see private repos; outside PRs and pinned repos drop `isPrivate` ones.
+- **Partial reports.** The import's commit sampling can 502 on huge histories
+  (`torvalds` fails after ~11s). The report is still saved with `developerError`,
+  the profile/activity/OSS sections, and pooling disabled. A 4xx still fails the request.
+  The admin import has the same 502 with no fallback.
+- **The model only narrates.** One `llmJSON()` call with the user's chosen provider.
+  `profileFacts()` hands it computed figures; the prompt forbids inventing numbers,
+  scoring or a hire verdict. No key → no summary, the report still saves.
+- `PROFILE_GRAPHQL` exports the exact query for `gh api graphql` checks.
+
 ## Outreach drafts
 
 `POST /api/outreach { analysisId, developerId, tone }` →
@@ -614,8 +657,9 @@ stylesheet may not have loaded by the time it renders.
   `src/components/*` client components: `AppShell`, `ThemeToggle`, `FitView`,
   `DeveloperBrowser`, `RepoPicker`, `KeyManager`, `AdminUserTable`, `LoginForm`,
   `RegisterForm`, `AuthButtons`, `AdminDevelopers`, `DeveloperWorkspace`, `ShortlistButton`,
-  `ShortlistsManager`, `OutreachButton`, `AiModelSettings` (in `ModelPicker.tsx`; the
-  picker is a native `<dialog>`). Pages fetch and guard, clients render and mutate — `/fit`
+  `ShortlistsManager`, `OutreachButton`, `ProfileAnalyzerForm`, `ProfileActions`,
+  `AiModelSettings` (in `ModelPicker.tsx`; the picker is a native `<dialog>`). Pages
+  fetch and guard, clients render and mutate — `/fit`
   follows this too (the form is `FitView`). `Logo`, `ArchetypeBadge`,
   `VerdictBadge`, `SubScoreBar`, `DeveloperCard` and `FullScreenLoader` are
   server components; keep them that way (`Logo` avoids `useId()` for exactly

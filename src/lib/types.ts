@@ -211,6 +211,8 @@ export interface MockDeveloper {
   nextRefreshAt?: string;
   /** Why the last refresh failed, if it did. Cleared by a successful one. */
   lastRefreshError?: string;
+  /** User id of whoever first added them to the pool (admin import or Profile Analyzer). */
+  addedBy?: string;
 }
 
 /** Developer with derived fields the UI/API want alongside the raw seed. */
@@ -327,5 +329,137 @@ export interface Shortlist {
   analysisId: string | null;
   developerIds: string[];
   createdAt: string;
+  updatedAt: string;
+}
+
+// ───────────────────────── GitHub Profile Analyzer (private to each user) ─────────────────────────
+
+/** One day on the contribution calendar. `date` is `YYYY-MM-DD`. */
+export interface ContributionDay {
+  date: string;
+  count: number;
+}
+
+/** Merged pull requests to one repository the developer doesn't own. */
+export interface OssContribution {
+  repo: string;
+  url: string;
+  stars: number;
+  mergedCount: number;
+  lastMergedAt: string | null;
+  /** A recent merged PR title, as an example. */
+  example: string;
+}
+
+export interface PinnedRepo {
+  nameWithOwner: string;
+  url: string;
+  description: string | null;
+  stars: number;
+  language: string | null;
+}
+
+export interface GithubOrg {
+  login: string;
+  name: string | null;
+  url: string;
+}
+
+/** Public facts about one of the developer's own repositories. */
+export interface RepoDetail {
+  name: string;
+  url: string;
+  description: string | null;
+  stars: number;
+  forks: number;
+  topics: string[];
+  license: string | null;
+  isArchived: boolean;
+  pushedAt: string | null;
+}
+
+/**
+ * Everything the Profile Analyzer computes from a public GitHub profile, beyond
+ * the cohort-shaped `MockDeveloper`. Every number is computed in code from
+ * GitHub's data; nothing here comes from a model.
+ */
+export interface GithubProfileInsights {
+  login: string;
+  name: string | null;
+  avatarUrl: string | null;
+  url: string;
+  bio: string | null;
+  company: string | null;
+  location: string | null;
+  /** Only an http(s) URL; anything else is dropped. */
+  websiteUrl: string | null;
+  twitter: string | null;
+  createdAt: string;
+  accountAgeYears: number;
+  followers: number;
+  following: number;
+  publicRepos: number;
+  /** Summed over their own public, non-fork repositories (up to 100, most-starred first). */
+  starsEarned: number;
+  forksEarned: number;
+  organizations: GithubOrg[];
+  pinned: PinnedRepo[];
+  activity: {
+    totalContributions: number;
+    commits: number;
+    pullRequests: number;
+    issues: number;
+    reviews: number;
+    /** Contributions to private repos, as a count only (when the user shares it). */
+    privateContributions: number;
+    activeDays: number;
+    longestStreak: number;
+    currentStreak: number;
+    busiestWeekday: string | null;
+    calendar: ContributionDay[];
+  };
+  openSource: {
+    /** How many of their most recent merged PRs were inspected. */
+    sampled: number;
+    /** Merged PRs in that sample that went to public repos they don't own. */
+    externalMerged: number;
+    repos: OssContribution[];
+  };
+  repoDetails: RepoDetail[];
+}
+
+/** Gemini's narrative over the report. Words only: no scores, no ranking. */
+export interface ProfileSummary {
+  headline: string;
+  strengths: string[];
+  likelyRoles: string[];
+  seniorityNotes: string;
+  verifyInInterview: string[];
+  caveats: string[];
+}
+
+/** A saved analysis, as a page or client sees it. */
+export interface ProfileReport {
+  id: string;
+  login: string;
+  developer: DeveloperView;
+  insights: GithubProfileInsights;
+  /** Null when no Gemini key was available or the call failed. */
+  summary: ProfileSummary | null;
+  summaryError: string | null;
+  /** Set when the commit/stack half failed (e.g. GitHub timing out on huge repos). */
+  developerError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A row in the saved-reports list: no calendar, repos or summary. */
+export interface ProfileReportListItem {
+  id: string;
+  login: string;
+  name: string;
+  avatarUrl: string | null;
+  archetype: Archetype;
+  headline: string | null;
   updatedAt: string;
 }

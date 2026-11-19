@@ -62,7 +62,12 @@ export async function runRefresh(deps: RefreshDeps): Promise<RefreshRun> {
     }
     try {
       const fresh = await deps.fetchDeveloper(dev);
-      await deps.save({ ...fresh, archetype: dev.archetype });
+      // Keep what a person decided: a hand-set archetype, and who added them.
+      await deps.save({
+        ...fresh,
+        archetype: dev.archetype,
+        ...(dev.addedBy ? { addedBy: dev.addedBy } : {}),
+      });
       refreshed += 1;
       log(`refreshed ${dev.id}`);
     } catch (err) {

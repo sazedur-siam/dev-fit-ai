@@ -56,6 +56,18 @@ describe("runRefresh", () => {
     expect(saved.archetype).toBe("backend"); // not the re-guessed "frontend"
   });
 
+  it("keeps who added them, which a fresh import doesn't know", async () => {
+    const d = deps({
+      listDue: vi.fn(async () => [dev("a", { addedBy: "pm1" }), dev("b")]),
+      // A real fetch returns a brand-new document with no addedBy.
+      fetchDeveloper: vi.fn(async (x: MockDeveloper) => dev(x.id, { totalCommits: 99 })),
+    });
+    await runRefresh(d);
+    const [[a], [b]] = vi.mocked(d.save).mock.calls;
+    expect(a.addedBy).toBe("pm1");
+    expect("addedBy" in b).toBe(false);
+  });
+
   it("asks for at most maxPerRun developers", async () => {
     const d = deps();
     await runRefresh(d);
