@@ -42,6 +42,9 @@ export default async function HistoryPage() {
           {analyses.map((a) => {
             const top = a.ranked.find((r) => r.devId === a.topPickId) ?? a.ranked[0];
             const outdated = a.scoringVersion !== SCORING_VERSION;
+            const rerunHref = a.repoUrl
+              ? `/fit?repo=${encodeURIComponent(a.repoUrl)}`
+              : `/fit?need=${encodeURIComponent(a.needText ?? "")}`;
             return (
               <li
                 key={a.id}
@@ -49,14 +52,25 @@ export default async function HistoryPage() {
               >
                 <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
                   <div className="min-w-0">
-                    <a
-                      href={a.repoUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-bold text-heading underline-offset-4 hover:text-accent-soft-fg hover:underline"
-                    >
-                      {a.owner}/{a.repo}
-                    </a>
+                    {a.repoUrl ? (
+                      <a
+                        href={a.repoUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-bold text-heading underline-offset-4 hover:text-accent-soft-fg hover:underline"
+                      >
+                        {a.owner}/{a.repo}
+                      </a>
+                    ) : (
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted">
+                          Described need
+                        </span>
+                        <p className="mt-0.5 line-clamp-2 font-bold text-heading">
+                          &ldquo;{a.needText}&rdquo;
+                        </p>
+                      </div>
+                    )}
                     <p className="mt-1.5 line-clamp-2 max-w-2xl text-xs leading-relaxed text-body">
                       {a.requirement.summary}
                     </p>
@@ -73,7 +87,7 @@ export default async function HistoryPage() {
                           numbers may differ today.
                         </span>
                         <Link
-                          href={`/fit?repo=${encodeURIComponent(a.repoUrl)}`}
+                          href={rerunHref}
                           className="font-bold underline underline-offset-4 hover:text-heading"
                         >
                           Re-run with v{SCORING_VERSION}
