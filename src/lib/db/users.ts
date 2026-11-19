@@ -327,9 +327,16 @@ export async function deleteUser(id: string): Promise<boolean> {
   const _id = new ObjectId(id);
   const res = await db.collection(COLLECTIONS.users).deleteOne({ _id });
   if (res.deletedCount !== 1) return false;
-  // Their stored credentials and history go with them.
-  await db.collection(COLLECTIONS.userKeys).deleteMany({ userId: id });
-  await db.collection(COLLECTIONS.analyses).deleteMany({ userId: id });
+  // Their stored credentials, history and private workspace go with them.
+  await Promise.all(
+    [
+      COLLECTIONS.userKeys,
+      COLLECTIONS.analyses,
+      COLLECTIONS.notes,
+      COLLECTIONS.tags,
+      COLLECTIONS.shortlists,
+    ].map((name) => db.collection(name).deleteMany({ userId: id }))
+  );
   return true;
 }
 

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAllDevelopers } from "@/lib/db/developers";
+import { tagsByDeveloper } from "@/lib/db/tags";
 import { DeveloperBrowser } from "@/components/DeveloperBrowser";
 import { getCurrentUser } from "@/lib/session";
 import Link from "next/link";
@@ -12,7 +13,10 @@ export default async function HomePage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const devs = await getAllDevelopers();
+  const [devs, tags] = await Promise.all([
+    getAllDevelopers(),
+    tagsByDeveloper(user.id).catch(() => ({})),
+  ]);
 
   if (devs.length === 0) {
     return (
@@ -54,7 +58,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <DeveloperBrowser developers={devs} />
+      <DeveloperBrowser developers={devs} tagsByDeveloper={tags} />
     </div>
   );
 }

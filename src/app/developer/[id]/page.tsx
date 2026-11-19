@@ -9,6 +9,10 @@ import {
 } from "@/components/ArchetypeBadge";
 import { getAllDevelopers } from "@/lib/db/developers";
 import { similarDevelopers } from "@/lib/similarity";
+import { listNotes } from "@/lib/db/notes";
+import { listTags } from "@/lib/db/tags";
+import { listShortlists } from "@/lib/db/shortlists";
+import { DeveloperWorkspace } from "@/components/DeveloperWorkspace";
 import { getCurrentUser } from "@/lib/session";
 
 /**
@@ -45,6 +49,12 @@ export default async function DeveloperDetailPage({
   const dev = cohort.find((d) => d.id === id);
   if (!dev) return notFound();
   const similar = similarDevelopers(dev, cohort, 3);
+  // The signed-in user's own workspace only; never anyone else's.
+  const [notes, tags, shortlists] = await Promise.all([
+    listNotes(user.id, dev.id),
+    listTags(user.id, dev.id),
+    listShortlists(user.id),
+  ]);
   const net = dev.linesAdded - dev.linesDeleted;
 
   return (
@@ -138,6 +148,13 @@ export default async function DeveloperDetailPage({
         <Stat label="Lines added" value={dev.linesAdded.toLocaleString()} />
         <Stat label="Net lines" value={`+${net.toLocaleString()}`} />
       </section>
+
+      <DeveloperWorkspace
+        developerId={dev.id}
+        initialNotes={notes}
+        initialTags={tags}
+        initialShortlists={shortlists}
+      />
 
       {similar.length > 0 && (
         <section className="mt-8">

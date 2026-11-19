@@ -135,6 +135,16 @@ can [register](#accounts-login-register) their own account instead.
   languages, stack), a highlighted top pick, and the full ranking with per-developer
   sub-score bars, verdict badges and AI explanations.
 
+### Notes, tags and shortlists (private to you)
+- **Notes** on any developer's page: write, edit, delete; timestamped.
+- **Tags** like `available-q1` or `wants-backend`, then filter the developers list by them.
+- **Shortlists**: named lists for a client or project. Add from a fit result (a new
+  list remembers which analysis it came from) or a developer's page; manage them on
+  `/shortlists`.
+
+Nobody else can see your notes, tags or shortlists, admins included. Deleting an
+account deletes them.
+
 ### Similar developers (`/developer/[id]`)
 Each profile lists the three developers with the most similar language and
 framework mix (weighted by commits), with the skills they share. Handy for finding
@@ -514,6 +524,11 @@ capped at 15 KB so the prompt stays inside the model's context.
 | `PUT /api/keys { kind, value }` | `{ key }` — stores encrypted | Signed in |
 | `DELETE /api/keys?kind=` | `{ removed, keys }` | Signed in |
 | `GET /api/analyses` | `{ analyses }` — yours only | Signed in |
+| `GET/POST /api/developers/[id]/notes` | Your notes on a developer / add one | Signed in |
+| `PATCH/DELETE /api/notes/[id]` | Edit / delete your note | Signed in |
+| `GET/POST/DELETE /api/developers/[id]/tags` | Your tags on a developer (`DELETE ?label=`) | Signed in |
+| `GET/POST /api/shortlists` | Your shortlists / create one | Signed in |
+| `PATCH/DELETE /api/shortlists/[id]` | Rename, `add`, `remove` / delete | Signed in |
 | `GET /api/admin/users` | `{ users }` + key **presence** | **Admin** |
 | `POST /api/admin/users` | `{ user }` — create an account | **Admin** |
 | `PATCH /api/admin/users/[id]` | `{ role }` or `{ password }` | **Admin** |

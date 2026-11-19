@@ -17,11 +17,20 @@ const ARCHETYPE_LABELS: Record<Archetype, string> = {
  */
 export function DeveloperBrowser({
   developers,
+  tagsByDeveloper = {},
 }: {
   developers: DeveloperView[];
+  /** The signed-in user's own tags, developerId → labels. */
+  tagsByDeveloper?: Record<string, string[]>;
 }) {
   const [query, setQuery] = useState("");
   const [stacks, setStacks] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+
+  const allTags = useMemo(
+    () => [...new Set(Object.values(tagsByDeveloper).flat())].sort((a, b) => a.localeCompare(b)),
+    [tagsByDeveloper]
+  );
 
   // Languages and frameworks, deduped case-insensitively, keeping the first-seen
   // casing for display.
@@ -44,11 +53,13 @@ export function DeveloperBrowser({
       const devStacks = [...dev.languages, ...dev.frameworks].map((l) => l.toLowerCase());
       // Every selected stack must be present — selecting more narrows further.
       const matchesStacks = wanted.every((w) => devStacks.includes(w));
-      return matchesName && matchesStacks;
+      const devTags = tagsByDeveloper[dev.id] ?? [];
+      const matchesTags = tags.every((t) => devTags.includes(t));
+      return matchesName && matchesStacks && matchesTags;
     });
-  }, [developers, query, stacks]);
+  }, [developers, query, stacks, tags, tagsByDeveloper]);
 
-  const isFiltering = query.trim().length > 0 || stacks.length > 0;
+  const isFiltering = query.trim().length > 0 || stacks.length > 0 || tags.length > 0;
 
   function toggleStack(stack: string) {
     setStacks((prev) =>
@@ -59,6 +70,7 @@ export function DeveloperBrowser({
   function clearAll() {
     setQuery("");
     setStacks([]);
+    setTags([]);
   }
 
   return (
@@ -138,6 +150,39 @@ export function DeveloperBrowser({
               })}
             </div>
           </div>
+
+          {allTags.length > 0 && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted">
+                Your tags{" "}
+                <span className="font-medium normal-case tracking-normal">(private to you)</span>
+              </div>
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {allTags.map((tag) => {
+                  const active = tags.includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() =>
+                        setTags((prev) =>
+                          prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+                        )
+                      }
+                      aria-pressed={active}
+                      className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+                        active
+                          ? "bg-accent text-accent-contrast shadow-brand"
+                          : "bg-surface-2 text-body ring-1 ring-inset ring-line hover:bg-surface-3 hover:text-heading"
+                      }`}
+                    >
+                      #{tag}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

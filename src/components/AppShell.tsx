@@ -74,6 +74,15 @@ const NAV: NavItem[] = [
     ),
   },
   {
+    href: "/shortlists",
+    label: "Shortlists",
+    icon: icon(
+      <>
+        <path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z" />
+      </>
+    ),
+  },
+  {
     href: "/settings",
     label: "Settings",
     icon: icon(

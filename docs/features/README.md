@@ -30,7 +30,7 @@ tests and CLAUDE.md then describe it, and the merged PR holds the original spec.
 | ✅ | 09 | AI Fluency score | M | 07 | No |
 | ✅ | 10 | Describe a need in plain text, with clarifying questions | M | 03 | No |
 | ✅ | 11 | Semantic matching with embeddings (built A + B; C, embeddings in the score, deliberately not built. First real run of `npm run suggest-aliases` needs your Gemini key) | M | 06 | No |
-| ⬜ | 12 | [Recruiter workspace: notes, tags, shortlists](12-recruiter-workspace.md) | M | none | No |
+| ✅ | 12 | Recruiter workspace: notes, tags, shortlists | M | none | No |
 | ⬜ | 13 | [Outreach email drafts](13-outreach-drafts.md) | S | 12 | No |
 
 If you only do three, do **01, 02 and 06**. They close a security gap, add a
