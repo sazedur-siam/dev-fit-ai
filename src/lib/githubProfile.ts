@@ -1,3 +1,4 @@
+import { AI_CONFIG_PATHS, detectAiTools } from "@/lib/aiFluency";
 import { detectFrameworks, type Manifests } from "@/lib/frameworkDetect";
 import { canonicalSkill } from "@/lib/skills";
 import type { Archetype, DeveloperRepo, MockDeveloper } from "@/lib/types";
@@ -127,7 +128,12 @@ export function buildDeveloper(
   user: GhUser,
   repos: GhRepo[],
   manifestsByRepo: Record<string, Manifests>,
-  opts: { archetype?: Archetype; now?: Date } = {}
+  opts: {
+    archetype?: Archetype;
+    now?: Date;
+    /** AI tool ids per repo. When given, every profile repo gets an `aiTools` array. */
+    aiToolsByRepo?: Record<string, string[]>;
+  } = {}
 ): MockDeveloper {
   const languageBytes: Record<string, number> = {};
   const commits: GhCommit[] = [];
@@ -168,6 +174,7 @@ export function buildDeveloper(
     deletions: r.deletions,
     languages: r.languages,
     frameworks: detectFrameworks(manifestsByRepo[r.repo.name] ?? {}),
+    ...(opts.aiToolsByRepo ? { aiTools: opts.aiToolsByRepo[r.repo.name] ?? [] } : {}),
   }));
 
   const allFrameworks = [...new Set(profileRepos.flatMap((r) => r.frameworks ?? []))];
@@ -270,12 +277,21 @@ const MANIFEST_FILES: Record<keyof Manifests, string> = {
   gemfile: "Gemfile",
 };
 
-/** One aliased query for every repo's manifests. Names go in as variables. */
+/**
+ * One aliased query for every repo's manifests (text) and AI-tool config files
+ * (presence only, aliased ai0…aiN in AI_CONFIG_PATHS order). Repo names go in as
+ * variables. ~3.3s for 8 repos measured against GitHub.
+ */
 function manifestQuery(count: number): string {
   const vars = Array.from({ length: count }, (_, i) => `$r${i}: String!`).join(", ");
-  const fields = Object.entries(MANIFEST_FILES)
-    .map(([key, file]) => `${key}: object(expression: "HEAD:${file}") { ... on Blob { text } }`)
-    .join(" ");
+  const fields = [
+    ...Object.entries(MANIFEST_FILES).map(
+      ([key, file]) => `${key}: object(expression: "HEAD:${file}") { ... on Blob { text } }`
+    ),
+    ...AI_CONFIG_PATHS.map(
+      (path, i) => `ai${i}: object(expression: "HEAD:${path}") { __typename }`
+    ),
+  ].join(" ");
   const repos = Array.from(
     { length: count },
     (_, i) => `r${i}: repository(owner: $owner, name: $r${i}) { ${fields} }`
@@ -321,10 +337,11 @@ export async function fetchGithubDeveloper(
     .slice(0, PROFILE_REPOS);
 
   const manifestsByRepo: Record<string, Manifests> = {};
+  const aiToolsByRepo: Record<string, string[]> = {};
   if (top.length > 0) {
     const variables: Record<string, string> = { owner: user.login };
     top.forEach((r, i) => (variables[`r${i}`] = r.name));
-    const data = await graphql<Record<string, Record<keyof Manifests, BlobField> | null>>(
+    const data = await graphql<Record<string, Record<string, BlobField> | null>>(
       manifestQuery(top.length),
       variables,
       token
@@ -333,10 +350,13 @@ export async function fetchGithubDeveloper(
       const blobs = data[`r${i}`];
       if (!blobs) return;
       manifestsByRepo[r.name] = Object.fromEntries(
-        Object.keys(MANIFEST_FILES).map((k) => [k, blobs[k as keyof Manifests]?.text ?? null])
+        Object.keys(MANIFEST_FILES).map((k) => [k, blobs[k]?.text ?? null])
       ) as Manifests;
+      aiToolsByRepo[r.name] = detectAiTools(
+        new Set(AI_CONFIG_PATHS.filter((_, j) => blobs[`ai${j}`]))
+      );
     });
   }
 
-  return buildDeveloper(user, repos, manifestsByRepo, opts);
+  return buildDeveloper(user, repos, manifestsByRepo, { ...opts, aiToolsByRepo });
 }

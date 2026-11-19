@@ -94,6 +94,10 @@ can [register](#accounts-login-register) their own account instead.
   `composer.json` / `go.mod` / `Gemfile`. The archetype is detected automatically
   unless you pick one. Needs a GitHub token in Settings. Re-import to refresh;
   remove any developer, sample or real. Sample developers are badged **Sample**.
+- **AI Fluency.** Imported developers get a 0–100 AI Fluency score from AI-tool
+  config files in their repos (Claude Code, Cursor, Copilot, Aider, Windsurf, Cline,
+  Roo, `AGENTS.md`). Shown on their page and as a chip in fit results; it is **not**
+  part of the fit score. A config file shows a tool was set up, not mastery.
 - **Nightly refresh.** Imported developers are re-imported automatically every 7,
   14 or 30 days depending on how recently they committed, by a free scheduled
   GitHub Actions workflow. It needs three repository secrets and Atlas network

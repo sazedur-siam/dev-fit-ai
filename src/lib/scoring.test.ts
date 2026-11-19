@@ -27,6 +27,7 @@ function dev(
     recentCommitMessages: [],
     languages: [],
     frameworks: [],
+    aiFluency: null,
     netLines: 1000,
     ...over,
   };

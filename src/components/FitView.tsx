@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArchetypeBadge, StackTag } from "@/components/ArchetypeBadge";
+import { AiFluencyBadge, ArchetypeBadge, StackTag } from "@/components/ArchetypeBadge";
 import { VerdictBadge } from "@/components/VerdictBadge";
 import { SubScoreBar } from "@/components/SubScoreBar";
 import { FullScreenLoader } from "@/components/FullScreenLoader";
@@ -320,6 +320,7 @@ function FitResultView({
                     </Link>
                     <ArchetypeBadge archetype={dev.archetype} />
                     <VerdictBadge verdict={score.verdict} />
+                    {dev.aiFluency && <AiFluencyBadge fluency={dev.aiFluency} />}
                   </div>
                   <p className="mt-2.5 text-sm leading-relaxed text-body">
                     {score.explanation}
