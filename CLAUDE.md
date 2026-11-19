@@ -462,6 +462,24 @@ in-memory collection stand-in; keep it passing when touching these modules.
 - UI: `DeveloperWorkspace` on `/developer/[id]`, `ShortlistButton` on fit results
   (a new list there records the `analysisId`), `ShortlistsManager` on `/shortlists`.
 
+## Outreach drafts
+
+`POST /api/outreach { analysisId, developerId, tone }` →
+[src/lib/outreach.ts](src/lib/outreach.ts) asks Gemini for a first-contact email
+`{ subject, body }`. **Drafts only: DevFit sends nothing.** The PM edits, then copies,
+opens a `mailto:` link, or saves it to their notes. Rules:
+
+- **The model gets facts, not scores.** `outreachFacts()` passes first name,
+  matching skills/repos (implications on the developer side, as in scoring) and the
+  requirement summary/domain, never `overall`, sub-scores, verdict or commit counts.
+- **`mentionsNumbers()` is the backstop.** A draft that mentions a score or
+  percentage is retried once with a stricter prompt; if one survives, the PM gets a
+  warning rather than a silently edited email. A `"not fit"` verdict also warns.
+- The analysis is loaded with `getUserAnalysis(user.id, …)`, so another user's
+  analysis id is a 404, and the key comes from `resolveCredentials(user)`.
+- Not built (deliberately): sending, which needs a paid provider and a verified
+  domain, and reusable templates.
+
 ## Similarity (outside every score)
 
 Two features use "semantic" closeness; **neither touches `overall` or a verdict**
@@ -578,7 +596,7 @@ stylesheet may not have loaded by the time it renders.
   `src/components/*` client components: `AppShell`, `ThemeToggle`, `FitView`,
   `DeveloperBrowser`, `RepoPicker`, `KeyManager`, `AdminUserTable`, `LoginForm`,
   `RegisterForm`, `AuthButtons`, `AdminDevelopers`, `DeveloperWorkspace`, `ShortlistButton`,
-  `ShortlistsManager`. Pages fetch and guard, clients render and mutate — `/fit`
+  `ShortlistsManager`, `OutreachButton`. Pages fetch and guard, clients render and mutate — `/fit`
   follows this too (the form is `FitView`). `Logo`, `ArchetypeBadge`,
   `VerdictBadge`, `SubScoreBar`, `DeveloperCard` and `FullScreenLoader` are
   server components; keep them that way (`Logo` avoids `useId()` for exactly
