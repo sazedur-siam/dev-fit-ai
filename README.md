@@ -94,6 +94,11 @@ can [register](#accounts-login-register) their own account instead.
   `composer.json` / `go.mod` / `Gemfile`. The archetype is detected automatically
   unless you pick one. Needs a GitHub token in Settings. Re-import to refresh;
   remove any developer, sample or real. Sample developers are badged **Sample**.
+- **Nightly refresh.** Imported developers are re-imported automatically every 7,
+  14 or 30 days depending on how recently they committed, by a free scheduled
+  GitHub Actions workflow. It needs three repository secrets and Atlas network
+  access before it does anything; see CLAUDE.md → *Nightly refresh*. The panel
+  shows when it last ran.
 
 ### Analysis history (`/history`)
 - Every fit run you've done, newest first, with the derived requirement and top
@@ -258,6 +263,7 @@ You land on `/fit`. Save a Gemini key at `/settings`, or set `GEMINI_API_KEY` in
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | `eslint .` (flat config) |
 | `npm test` | Vitest unit tests (`src/**/*.test.ts`) |
+| `npm run refresh` | Re-import GitHub developers whose refresh date has passed (runs nightly in GitHub Actions) |
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests and a secret-free build on
 every pull request.

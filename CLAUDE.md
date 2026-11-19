@@ -25,6 +25,7 @@ npm run build      # prod build; also typechecks
 npm run typecheck  # tsc --noEmit
 npm run lint       # eslint . (flat config)
 npm test           # vitest run (unit tests, no network, no DB)
+npm run refresh    # re-import GitHub developers that are due (nightly in CI)
 ```
 
 `npm run seed` is **not optional** — the cohort lives in MongoDB, and without it
@@ -380,6 +381,35 @@ What's deliberate:
 - `buildDeveloper()` is pure and tested; `fetchGithubDeveloper()` is the network
   half. `GITHUB_QUERIES` exposes the exact query strings so they can be run by hand
   with `gh api graphql` when GitHub's schema is in doubt.
+
+### Nightly refresh
+
+[.github/workflows/refresh.yml](.github/workflows/refresh.yml) runs `npm run refresh`
+([scripts/refresh-developers.ts](scripts/refresh-developers.ts)) at 01:00 UTC and
+on demand ("Run workflow"). It re-imports `source: "github"` developers whose
+`nextRefreshAt` has passed: 7 days if they committed in the last 30, 14 if in the
+last 180, otherwise 30 (`nextRefreshDate()`). The loop is
+[src/lib/refresh.ts](src/lib/refresh.ts), with I/O injected and tested. Rules:
+
+- **The archetype is kept** across refreshes (an admin may have set it by hand).
+- A failure (e.g. a deleted account, GitHub 404) keeps the old profile, records
+  `lastRefreshError` and postpones that developer 30 days.
+- It stops when the token's GraphQL budget drops under 500 points; the rest stay due.
+- Each run writes a `refreshRuns` document; the admin Developers panel shows the last.
+- **Without config it exits 0 with "Refresh skipped"**, so the schedule stays green
+  until set up. Don't make missing secrets fail the job.
+
+**One-time setup, by the repo owner** (not automatable from here):
+
+1. Repository secrets: `MONGODB_URI`, `MONGODB_DB`, and `GH_REFRESH_TOKEN` (a
+   fine-grained token, public repositories read-only; secret names can't start with
+   `GITHUB_`).
+2. **Atlas network access.** GitHub runners have no fixed IPs, so the cluster must
+   accept `0.0.0.0/0`, protected by a strong password on a database user scoped to
+   the DevFit database only. That is a real trade-off; skip this workflow rather
+   than open the cluster casually.
+3. GitHub disables schedules on repositories with no activity for 60 days;
+   re-enable from the Actions tab.
 
 ## Implementation notes
 

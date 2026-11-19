@@ -65,4 +65,5 @@ export const COLLECTIONS = {
   rateLimits: "rateLimits",
   repoDigests: "repoDigests",
   repoRequirements: "repoRequirements",
+  refreshRuns: "refreshRuns",
 } as const;

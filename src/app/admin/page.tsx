@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/session";
 import { listUsers } from "@/lib/db/users";
 import { getKeyPresenceByUser } from "@/lib/db/keys";
 import { getAllDevelopers } from "@/lib/db/developers";
+import { getLastRefreshRun } from "@/lib/db/refreshRuns";
 import { AdminUserTable, type AdminUserRow } from "@/components/AdminUserTable";
 import { AdminDevelopers, type AdminDeveloperRow } from "@/components/AdminDevelopers";
 
@@ -14,10 +15,11 @@ export default async function AdminPage() {
   // Authoritative check against MongoDB, not the JWT claim.
   if (user.role !== "admin") redirect("/");
 
-  const [users, presence, developers] = await Promise.all([
+  const [users, presence, developers, lastRefresh] = await Promise.all([
     listUsers(),
     getKeyPresenceByUser(),
     getAllDevelopers(),
+    getLastRefreshRun().catch(() => null),
   ]);
   const developerCount = developers.length;
 
@@ -76,7 +78,19 @@ export default async function AdminPage() {
       </div>
 
       <div className="mt-10">
-        <AdminDevelopers initial={developerRows} />
+        <AdminDevelopers
+          initial={developerRows}
+          lastRefresh={
+            lastRefresh
+              ? {
+                  at: lastRefresh.startedAt,
+                  refreshed: lastRefresh.refreshed,
+                  failed: lastRefresh.failed,
+                  stoppedForRateLimit: lastRefresh.stoppedForRateLimit,
+                }
+              : null
+          }
+        />
       </div>
     </div>
   );

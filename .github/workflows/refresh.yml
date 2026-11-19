@@ -1,0 +1,35 @@
+name: Nightly developer refresh
+
+# Re-imports GitHub developers whose refresh date has passed (7/14/30 days by how
+# recently they committed). Free on GitHub Actions; a run takes a few minutes.
+#
+# Needs repository secrets MONGODB_URI, MONGODB_DB and GH_REFRESH_TOKEN (a
+# fine-grained token with public read-only access). Until they exist the script
+# logs "Refresh skipped" and the run stays green. MongoDB Atlas must also accept
+# connections from GitHub's runners, which have no fixed IPs; see CLAUDE.md.
+
+on:
+  schedule:
+    - cron: "0 1 * * *" # 01:00 UTC daily
+  workflow_dispatch: {}
+
+concurrency:
+  group: developer-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run refresh
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          MONGODB_DB: ${{ secrets.MONGODB_DB }}
+          GITHUB_REFRESH_TOKEN: ${{ secrets.GH_REFRESH_TOKEN }}

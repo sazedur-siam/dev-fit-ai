@@ -24,7 +24,21 @@ const ROW_ACTION_CLASS =
   "rounded-lg border border-line px-2.5 py-1.5 text-xs font-semibold text-body transition hover:border-danger-line hover:text-danger-fg disabled:cursor-not-allowed disabled:opacity-40";
 
 /** The cohort every fit run ranks against: import real developers, remove any. */
-export function AdminDevelopers({ initial }: { initial: AdminDeveloperRow[] }) {
+export interface LastRefreshSummary {
+  at: string;
+  refreshed: number;
+  failed: number;
+  stoppedForRateLimit: boolean;
+}
+
+export function AdminDevelopers({
+  initial,
+  lastRefresh,
+}: {
+  initial: AdminDeveloperRow[];
+  /** Latest nightly refresh run, or null if it has never run. */
+  lastRefresh: LastRefreshSummary | null;
+}) {
   const router = useRouter();
   const [rows, setRows] = useState(initial);
   const [login, setLogin] = useState("");
@@ -111,6 +125,13 @@ export function AdminDevelopers({ initial }: { initial: AdminDeveloperRow[] }) {
         The cohort every fit run ranks against.
         {sampleCount > 0 &&
           ` ${sampleCount} of ${rows.length} are invented sample developers; import real ones and remove the samples when you're ready.`}
+      </p>
+      <p className="mt-1 text-xs text-muted">
+        {lastRefresh
+          ? `Nightly refresh last ran ${lastRefresh.at.slice(0, 16).replace("T", " ")} UTC: ${lastRefresh.refreshed} refreshed${
+              lastRefresh.failed ? `, ${lastRefresh.failed} failed` : ""
+            }${lastRefresh.stoppedForRateLimit ? ", stopped early for the GitHub rate limit" : ""}.`
+          : "Nightly refresh hasn't run yet. It needs the GitHub Actions secrets described in CLAUDE.md."}
       </p>
 
       <form

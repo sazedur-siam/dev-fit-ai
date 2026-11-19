@@ -149,6 +149,12 @@ export interface MockDeveloper {
   githubLogin?: string;
   /** ISO timestamp of the last import or refresh. */
   importedAt?: string;
+  /** ISO timestamp of their newest sampled commit, for imported developers. */
+  lastCommitAt?: string;
+  /** ISO timestamp after which the nightly refresh re-imports them. */
+  nextRefreshAt?: string;
+  /** Why the last refresh failed, if it did. Cleared by a successful one. */
+  lastRefreshError?: string;
 }
 
 /** Developer with derived fields the UI/API want alongside the raw seed. */
