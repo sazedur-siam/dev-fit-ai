@@ -209,6 +209,12 @@ export const ShortlistUpdateSchema = z
     error: "Add or remove one developer at a time.",
   });
 
+export const OutreachBodySchema = z.object({
+  analysisId: z.string({ error: "analysisId is required" }).min(1, { error: "analysisId is required" }),
+  developerId: z.string({ error: "developerId is required" }).min(1, { error: "developerId is required" }),
+  tone: z.enum(["friendly", "formal"]).catch("friendly"),
+});
+
 const ROLE_ERROR = 'role must be "admin" or "project_manager"';
 
 /** Either a password reset or a role change. */

@@ -145,6 +145,13 @@ can [register](#accounts-login-register) their own account instead.
 Nobody else can see your notes, tags or shortlists, admins included. Deleting an
 account deletes them.
 
+### Outreach drafts (fit results)
+"✉ Draft message" on any result writes a short first-contact email with Gemini,
+from the facts of the match: matching skills, relevant repos, the project summary.
+It never includes scores, and warns you if one slips in. Edit it, then **Copy**,
+**Open in email** (your own client sends it), or **Save to notes**. DevFit never
+sends email itself.
+
 ### Similar developers (`/developer/[id]`)
 Each profile lists the three developers with the most similar language and
 framework mix (weighted by commits), with the skills they share. Handy for finding
@@ -527,6 +534,7 @@ capped at 15 KB so the prompt stays inside the model's context.
 | `GET/POST /api/developers/[id]/notes` | Your notes on a developer / add one | Signed in |
 | `PATCH/DELETE /api/notes/[id]` | Edit / delete your note | Signed in |
 | `GET/POST/DELETE /api/developers/[id]/tags` | Your tags on a developer (`DELETE ?label=`) | Signed in |
+| `POST /api/outreach { analysisId, developerId, tone }` | `{ draft: { subject, body, warnings } }` — never sent | Signed in |
 | `GET/POST /api/shortlists` | Your shortlists / create one | Signed in |
 | `PATCH/DELETE /api/shortlists/[id]` | Rename, `add`, `remove` / delete | Signed in |
 | `GET /api/admin/users` | `{ users }` + key **presence** | **Admin** |

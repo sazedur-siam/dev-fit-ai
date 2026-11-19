@@ -8,6 +8,7 @@ import { SubScoreBar } from "@/components/SubScoreBar";
 import { FullScreenLoader } from "@/components/FullScreenLoader";
 import { RepoPicker } from "@/components/RepoPicker";
 import { ShortlistButton } from "@/components/ShortlistButton";
+import { OutreachButton } from "@/components/OutreachButton";
 import type {
   ClarifyingQuestion,
   DeveloperView,
@@ -527,13 +528,18 @@ function FitResultView({
                     <ArchetypeBadge archetype={dev.archetype} />
                     <VerdictBadge verdict={score.verdict} />
                     {dev.aiFluency && <AiFluencyBadge fluency={dev.aiFluency} />}
-                    <div className="ml-auto">
+                    <div className="ml-auto flex flex-wrap items-center gap-2">
                       <ShortlistButton
                         developerId={dev.id}
                         analysisId={data.analysisId}
                         suggestedName={sourceLabel || "Shortlist"}
                       />
                     </div>
+                    <OutreachButton
+                      developerId={dev.id}
+                      developerName={dev.name}
+                      analysisId={data.analysisId}
+                    />
                   </div>
                   <p className="mt-2.5 text-sm leading-relaxed text-body">
                     {score.explanation}
