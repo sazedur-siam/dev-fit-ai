@@ -141,7 +141,7 @@ export async function analyzeRepo(
 
 Return STRICTLY this JSON shape (no prose, no fences):
 {
-  "stack": string[],                     // frameworks, libs, patterns actually used (e.g. "Next.js App Router", "Django REST Framework", "Magento 2")
+  "stack": string[],                     // frameworks, libraries and platforms actually used, by their SHORT common name (e.g. "Next.js", "React", "Django REST Framework", "Magento", "Tailwind CSS") — no versions, no qualifiers like "App Router"
   "languages": string[],                 // programming languages present, most-used first
   "primaryArchetypeNeeded": "frontend" | "backend" | "fullstack",
   "domain": string,                      // one-line business/technical domain (e.g. "e-commerce storefront on Magento 2")
@@ -153,6 +153,7 @@ Rules:
 - Base your answer on evidence in the digest (file paths, config files, imports).
 - If the tree is mixed but the meaningful code is on one side, pick that archetype; only choose "fullstack" if BOTH frontend and backend concerns are non-trivial.
 - Do not invent frameworks that aren't visible. Prefer omitting to guessing.
+- Put programming languages in "languages", not in "stack".
 - Keep arrays deduplicated. Return valid JSON only.
 
 --- DIGEST START ---
@@ -195,15 +196,21 @@ export async function explainRanking(
     name: d.name,
     archetype: d.archetype,
     languages: d.languages,
+    frameworks: d.frameworks,
     totalCommits: d.totalCommits,
     netLines: d.netLines,
     recentCommitMessages: d.recentCommitMessages.slice(0, 3),
-    repos: d.repos.map((r) => ({ name: r.name, languages: r.languages })),
+    repos: d.repos.map((r) => ({
+      name: r.name,
+      languages: r.languages,
+      frameworks: r.frameworks ?? [],
+    })),
   }));
 
   const scoredLite = ranked.map((r) => ({
     devId: r.devId,
-    stackOverlap: r.stackOverlap,
+    languageOverlap: r.languageOverlap,
+    frameworkOverlap: r.frameworkOverlap,
     archetypeMatch: r.archetypeMatch,
     experienceDepth: r.experienceDepth,
     overall: r.overall,
@@ -234,7 +241,7 @@ Return STRICTLY this JSON:
 }
 
 Rules:
-- Reference concrete signals (languages the dev has that the repo needs, archetype fit, commit depth).
+- Reference concrete signals (languages and frameworks the dev has that the repo needs, archetype fit, commit depth).
 - For low-fit devs, name the gap (missing language, wrong specialty).
 - Never contradict the numeric verdict.
 - Be specific. No filler ("This developer would be a great addition"). Aim for review-caliber sharpness.`;

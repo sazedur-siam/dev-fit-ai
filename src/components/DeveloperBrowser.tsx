@@ -23,11 +23,12 @@ export function DeveloperBrowser({
   const [query, setQuery] = useState("");
   const [stacks, setStacks] = useState<string[]>([]);
 
-  // Deduped case-insensitively, keeping the first-seen casing for display.
+  // Languages and frameworks, deduped case-insensitively, keeping the first-seen
+  // casing for display.
   const allStacks = useMemo(() => {
     const seen = new Map<string, string>();
     for (const dev of developers) {
-      for (const lang of dev.languages) {
+      for (const lang of [...dev.languages, ...dev.frameworks]) {
         const key = lang.trim().toLowerCase();
         if (key && !seen.has(key)) seen.set(key, lang.trim());
       }
@@ -40,7 +41,7 @@ export function DeveloperBrowser({
     const wanted = stacks.map((s) => s.toLowerCase());
     return developers.filter((dev) => {
       const matchesName = !q || dev.name.toLowerCase().includes(q);
-      const devStacks = dev.languages.map((l) => l.toLowerCase());
+      const devStacks = [...dev.languages, ...dev.frameworks].map((l) => l.toLowerCase());
       // Every selected stack must be present — selecting more narrows further.
       const matchesStacks = wanted.every((w) => devStacks.includes(w));
       return matchesName && matchesStacks;

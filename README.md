@@ -498,18 +498,23 @@ JSON and a missing `repoUrl` return `400`; upstream GitHub `4xx` is surfaced as
 
 ## Scoring
 
-Three deterministic sub-scores, each `0–100`:
+Four deterministic sub-scores, each `0–100` (scoring version `2.0.0`):
 
 | Sub-score | Weight | How |
 | --- | --- | --- |
-| `stackOverlap` | 0.40 | dev languages ∩ (repo languages ∪ stack), over the repo set size |
-| `archetypeMatch` | 0.35 | exact = 100 · fullstack→specialist = 75 · specialist→fullstack = 60 · opposite = 25 |
+| `languageOverlap` | 0.25 | share of the repo's languages the developer has written |
+| `frameworkOverlap` | 0.20 | share of the repo's frameworks the developer has used, matched through a fixed alias table (`src/lib/skills.ts`) |
+| `archetypeMatch` | 0.30 | exact = 100 · fullstack→specialist = 75 · specialist→fullstack = 60 · opposite = 25 |
 | `experienceDepth` | 0.25 | commit percentile across the cohort, blended 70/30 with normalized net lines |
 
 ```
-overall = 0.40*stackOverlap + 0.35*archetypeMatch + 0.25*experienceDepth
+overall = 0.25*languageOverlap + 0.20*frameworkOverlap + 0.30*archetypeMatch + 0.25*experienceDepth
 verdict = overall ≥ 75 → fit | 55–74 → ramp-up | < 55 → not fit
 ```
+
+An empty requirement list (no languages, or no stack) scores a neutral 50. Before
+2.0.0, frameworks and languages shared one `stackOverlap` score whose framework terms
+could never match, which capped realistic scores near 63.
 
 Weights, thresholds and archetype distances all live in `src/lib/config.ts` and
 can be tuned without touching the engine.
@@ -522,7 +527,8 @@ can be tuned without touching the engine.
 
 | Knob | Default | Meaning |
 | --- | --- | --- |
-| `SCORING_WEIGHTS` | `0.40 / 0.35 / 0.25` | Sub-score blend |
+| `SCORING_VERSION` | `2.0.0` | Stamped on every saved analysis; bump on any scoring change |
+| `SCORING_WEIGHTS` | `0.25 / 0.20 / 0.30 / 0.25` | Sub-score blend |
 | `VERDICT_THRESHOLDS` | `fit: 75`, `rampUp: 55` | Verdict cut-offs |
 | `ARCHETYPE_MATCH_SCORES` | `100 / 75 / 60 / 25` | Archetype distance |
 | `DIGEST_LIMITS.maxTreePaths` | `400` | Tree paths shown to the model |
@@ -537,16 +543,14 @@ can be tuned without touching the engine.
 - **Commit counts and LOC are noisy proxies for skill, not proof of it.** The
   output is decision support for a human conversation, not a pass/fail gate. The
   UI carries this disclaimer and it should stay there.
-- **`stackOverlap` is structurally depressed.** Framework strings in
-  `requirement.stack` (e.g. `"Next.js App Router"`) can never match a developer's
-  `languages`, but they still count in the denominator. On a framework-heavy repo
-  the realistic ceiling is ≈ 63, so a `"fit"` verdict is very hard to reach and
-  most developers land on `ramp-up`. Scoring `stack` as its own sub-score is the
-  honest fix — see [Future scope](#future-scope).
+- **Framework matching is only as good as the alias table.** A spelling that
+  isn't in `src/lib/skills.ts` falls back to a compacted form, so `"Some Lib"` and
+  `"some-lib"` still meet, but a genuinely different name for the same thing won't
+  until someone adds the alias.
 - **`experienceDepth` is cohort-relative.** Adding or removing a seeded developer
   shifts everyone else's score.
-- **No email verification or registration rate limit.** Anyone can register any
-  address, and a script could create accounts in bulk. Self-registered accounts
+- **No email verification.** Anyone can register any address (registration is
+  rate-limited to 10 attempts per IP per hour, so not in bulk). Self-registered accounts
   can't use the server's API keys, so the cost is database rows, not model spend.
   Google sign-in is the only proof of email ownership (see
   [Google sign-in](#google-sign-in)).
@@ -623,7 +627,7 @@ attribution traps that produce confident-but-wrong numbers.
 | Gemini `404 … no longer available` | Your `GEMINI_MODEL` is retired. Use `gemini-3.6-flash` or `gemini-flash-latest`. |
 | GitHub `401 Bad credentials` | `GITHUB_TOKEN` is invalid, expired, or holds the wrong value — check the two keys aren't swapped. |
 | Repo picker says it can't list repos | `GITHUB_TOKEN` is missing or lacks repository metadata access. |
-| No developer ever shows `Fit` | Expected — see the `stackOverlap` note in [Known limitations](#known-limitations). |
+| No developer ever shows `Fit` | Re-run `npm run seed`: developers seeded before scoring 2.0.0 have no frameworks, so `frameworkOverlap` is 0 for all of them. |
 | Env change had no effect | Env vars are read at server start; restart `npm run dev`. |
 
 ---

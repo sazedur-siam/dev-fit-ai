@@ -10,29 +10,56 @@ import type {
   RepoRequirement,
   Verdict,
 } from "@/lib/types";
+import { canonicalSkill, expandSkills } from "@/lib/skills";
 
 const clamp = (n: number, min = 0, max = 100) =>
   Math.max(min, Math.min(max, n));
 
 const round = (n: number) => Math.round(n * 10) / 10;
 
-/** Case-insensitive language overlap. */
-export function stackOverlap(
+/** Share of `target` ids found in `have`, 0–100. Empty target → neutral 50. */
+function coverage(target: Set<string>, have: Set<string>): number {
+  if (target.size === 0) return 50;
+  let hits = 0;
+  target.forEach((t) => {
+    if (have.has(t)) hits += 1;
+  });
+  return clamp((hits / target.size) * 100);
+}
+
+/** Share of the repo's languages the developer has written. */
+export function languageOverlap(
   devLangs: string[],
   requirement: RepoRequirement
 ): number {
+  const target = new Set(requirement.languages.map(canonicalSkill).filter(Boolean));
+  const have = new Set(devLangs.map(canonicalSkill));
+  return coverage(target, have);
+}
+
+/**
+ * Share of the repo's frameworks and libraries the developer has used, compared
+ * through the alias table in skills.ts ("Next.js App Router" = "NextJS").
+ *
+ * Scored separately from languages on purpose. The old single `stackOverlap`
+ * divided by languages ∪ stack while developers only had languages, so every
+ * framework was an unmatchable denominator term and "fit" was nearly unreachable.
+ *
+ * Stack entries that are really languages (also in `requirement.languages`) are
+ * skipped here, since languageOverlap already counts them. The developer's
+ * languages still count as skills, so "GraphQL" in a stack can match either list.
+ */
+export function frameworkOverlap(
+  dev: Pick<DeveloperView, "languages" | "frameworks">,
+  requirement: RepoRequirement
+): number {
+  const languageIds = new Set(requirement.languages.map(canonicalSkill));
   const target = new Set(
-    [...requirement.languages, ...requirement.stack].map((s) =>
-      s.trim().toLowerCase()
-    )
+    requirement.stack
+      .map(canonicalSkill)
+      .filter((id) => id && !languageIds.has(id))
   );
-  if (target.size === 0) return 50; // no signal → neutral
-  const dev = new Set(devLangs.map((s) => s.trim().toLowerCase()));
-  let hits = 0;
-  target.forEach((t) => {
-    if (dev.has(t)) hits += 1;
-  });
-  return clamp((hits / target.size) * 100);
+  return coverage(target, expandSkills([...dev.frameworks, ...dev.languages]));
 }
 
 export function archetypeMatch(
@@ -78,12 +105,14 @@ export function experienceDepth(
 }
 
 export function overallScore(sub: {
-  stackOverlap: number;
+  languageOverlap: number;
+  frameworkOverlap: number;
   archetypeMatch: number;
   experienceDepth: number;
 }): number {
   return clamp(
-    SCORING_WEIGHTS.stackOverlap * sub.stackOverlap +
+    SCORING_WEIGHTS.languageOverlap * sub.languageOverlap +
+      SCORING_WEIGHTS.frameworkOverlap * sub.frameworkOverlap +
       SCORING_WEIGHTS.archetypeMatch * sub.archetypeMatch +
       SCORING_WEIGHTS.experienceDepth * sub.experienceDepth
   );
@@ -101,17 +130,20 @@ export function computeSubScores(
   requirement: RepoRequirement,
   cohort: DeveloperView[]
 ): Omit<FitScore, "explanation"> {
-  const so = stackOverlap(dev.languages, requirement);
+  const lo = languageOverlap(dev.languages, requirement);
+  const fo = frameworkOverlap(dev, requirement);
   const am = archetypeMatch(dev.archetype, requirement.primaryArchetypeNeeded);
   const ed = experienceDepth(dev, cohort);
   const overall = overallScore({
-    stackOverlap: so,
+    languageOverlap: lo,
+    frameworkOverlap: fo,
     archetypeMatch: am,
     experienceDepth: ed,
   });
   return {
     devId: dev.id,
-    stackOverlap: round(so),
+    languageOverlap: round(lo),
+    frameworkOverlap: round(fo),
     archetypeMatch: round(am),
     experienceDepth: round(ed),
     overall: round(overall),

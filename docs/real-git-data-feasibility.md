@@ -159,15 +159,10 @@ than reinvented.
 It substitutes for [src/data/developers.ts](../src/data/developers.ts) — the seeded
 cohort — and leaves the scoring engine's shape intact.
 
-It also **fixes a known flaw**. Documented in [CLAUDE.md](../CLAUDE.md): `stackOverlap`
-divides by `|languages ∪ stack|`, but a developer's `languages` only ever contains
-languages, never framework strings like `"Next.js App Router"`. Every `stack` entry
-is therefore an unmatchable denominator term, which caps a realistic score near 63
-and makes a `"fit"` verdict effectively unreachable — observed on a real run.
-
-Real ingestion supplies per-developer **framework** signals, derived from imports in
-files they actually touched, so `stack` becomes matchable and the sub-score starts
-meaning something.
+Scoring 2.0.0 already scores frameworks separately (`frameworkOverlap`, through
+the alias table in `src/lib/skills.ts`), but the seeded developers' frameworks are
+hand-written. Real ingestion would supply them from evidence: imports and dependency
+manifests in the files each developer actually touched.
 
 Two additions worth making at the same time:
 

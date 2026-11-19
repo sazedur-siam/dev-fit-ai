@@ -9,11 +9,16 @@
  * scores below, or to a sub-score formula in scoring.ts.** `config.test.ts`
  * fingerprints the constants and fails if they change under an unchanged version.
  */
-export const SCORING_VERSION = "1.0.0";
+export const SCORING_VERSION = "2.0.0";
 
+/**
+ * 2.0.0 split the old `stackOverlap` (0.40) into languages and frameworks, and
+ * took 0.05 from archetype so the two skill signals together outweigh it.
+ */
 export const SCORING_WEIGHTS = {
-  stackOverlap: 0.40,
-  archetypeMatch: 0.35,
+  languageOverlap: 0.25,
+  frameworkOverlap: 0.20,
+  archetypeMatch: 0.30,
   experienceDepth: 0.25,
 } as const;
 
@@ -40,7 +45,7 @@ export const REPO_CACHE_TTL_DAYS = 7;
  * Part of the requirement cache key. **Bump it whenever the analyzeRepo() prompt
  * changes**, or cached requirements from the old prompt keep being served.
  */
-export const REQUIREMENT_PROMPT_VERSION = "1";
+export const REQUIREMENT_PROMPT_VERSION = "2";
 
 export const DIGEST_LIMITS = {
   maxTreePaths: 400,

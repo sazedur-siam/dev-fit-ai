@@ -22,6 +22,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 34210,
         deletions: 18820,
         languages: ["TypeScript", "TSX", "CSS"],
+        frameworks: ["Next.js", "React"],
       },
       {
         name: "design-tokens",
@@ -29,6 +30,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 9840,
         deletions: 3120,
         languages: ["TypeScript", "CSS"],
+        frameworks: ["Style Dictionary"],
       },
       {
         name: "hummingbird-storefront",
@@ -36,6 +38,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 34270,
         deletions: 19310,
         languages: ["TypeScript", "TSX", "SCSS"],
+        frameworks: ["Next.js", "React"],
       },
     ],
     recentCommitMessages: [
@@ -59,7 +62,8 @@ export const DEVELOPERS: MockDeveloper[] = [
         commits: 421,
         additions: 22110,
         deletions: 9310,
-        languages: ["TypeScript", "TSX", "Tailwind"],
+        languages: ["TypeScript", "TSX"],
+        frameworks: ["Next.js", "React", "Tailwind CSS"],
       },
       {
         name: "company-blog",
@@ -67,6 +71,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 15120,
         deletions: 6420,
         languages: ["JavaScript", "TSX", "MDX"],
+        frameworks: ["Next.js", "React"],
       },
       {
         name: "landing-lab",
@@ -74,6 +79,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 14010,
         deletions: 6380,
         languages: ["TypeScript", "TSX", "CSS"],
+        frameworks: ["Next.js", "React"],
       },
     ],
     recentCommitMessages: [
@@ -98,6 +104,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 28110,
         deletions: 12520,
         languages: ["TypeScript", "TSX", "SCSS"],
+        frameworks: ["React", "Zustand", "React Hook Form"],
       },
       {
         name: "sensory-admin",
@@ -105,13 +112,15 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 18420,
         deletions: 8210,
         languages: ["TypeScript", "TSX"],
+        frameworks: ["React", "Ant Design", "Zustand"],
       },
       {
         name: "component-playground",
         commits: 252,
         additions: 13280,
         deletions: 6610,
-        languages: ["TypeScript", "TSX", "Storybook"],
+        languages: ["TypeScript", "TSX"],
+        frameworks: ["React", "Storybook"],
       },
     ],
     recentCommitMessages: [
@@ -136,13 +145,15 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 20110,
         deletions: 8210,
         languages: ["PHTML", "SCSS", "JavaScript"],
+        frameworks: ["Magento", "RequireJS"],
       },
       {
         name: "checkout-fe",
         commits: 210,
         additions: 9820,
         deletions: 4620,
-        languages: ["JavaScript", "KnockoutJS", "SCSS"],
+        languages: ["JavaScript", "SCSS"],
+        frameworks: ["Magento", "Knockout.js"],
       },
       {
         name: "static-site",
@@ -150,6 +161,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 4280,
         deletions: 2150,
         languages: ["HTML", "CSS", "JavaScript"],
+        frameworks: ["Gulp"],
       },
     ],
     recentCommitMessages: [
@@ -176,6 +188,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 44120,
         deletions: 22110,
         languages: ["Python", "SQL"],
+        frameworks: ["Django", "Django REST Framework", "PostgreSQL"],
       },
       {
         name: "billing-service",
@@ -183,6 +196,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 26310,
         deletions: 14210,
         languages: ["Python", "SQL"],
+        frameworks: ["Django", "Celery", "PostgreSQL"],
       },
       {
         name: "event-bus",
@@ -190,6 +204,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 21720,
         deletions: 11890,
         languages: ["Python", "YAML"],
+        frameworks: ["Celery", "RabbitMQ"],
       },
     ],
     recentCommitMessages: [
@@ -214,6 +229,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 34120,
         deletions: 15420,
         languages: ["PHP", "XML"],
+        frameworks: ["Magento"],
       },
       {
         name: "erp-connector",
@@ -221,6 +237,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 20110,
         deletions: 9820,
         languages: ["PHP", "SQL"],
+        frameworks: ["Magento", "MySQL"],
       },
       {
         name: "b2b-pricing-module",
@@ -228,6 +245,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 17210,
         deletions: 7970,
         languages: ["PHP", "GraphQL", "XML"],
+        frameworks: ["Magento"],
       },
     ],
     recentCommitMessages: [
@@ -252,6 +270,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 22110,
         deletions: 9430,
         languages: ["PHP", "SQL"],
+        frameworks: ["WordPress", "MySQL"],
       },
       {
         name: "wp-headless-api",
@@ -259,13 +278,15 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 21430,
         deletions: 10820,
         languages: ["PHP", "TypeScript"],
+        frameworks: ["WordPress"],
       },
       {
         name: "notification-service",
         commits: 302,
         additions: 18760,
         deletions: 7860,
-        languages: ["Node.js", "TypeScript"],
+        languages: ["TypeScript"],
+        frameworks: ["Node.js", "BullMQ", "Redis"],
       },
     ],
     recentCommitMessages: [
@@ -292,6 +313,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 34220,
         deletions: 16210,
         languages: ["TypeScript", "TSX", "GraphQL"],
+        frameworks: ["Next.js", "React"],
       },
       {
         name: "hummingbird-m2-api",
@@ -299,13 +321,15 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 27110,
         deletions: 13290,
         languages: ["PHP", "GraphQL"],
+        frameworks: ["Magento"],
       },
       {
         name: "loyalty-service",
         commits: 406,
         additions: 21890,
         deletions: 11710,
-        languages: ["TypeScript", "Node.js", "SQL"],
+        languages: ["TypeScript", "SQL"],
+        frameworks: ["Node.js", "tRPC", "PostgreSQL"],
       },
     ],
     recentCommitMessages: [
@@ -329,7 +353,8 @@ export const DEVELOPERS: MockDeveloper[] = [
         commits: 512,
         additions: 27220,
         deletions: 13110,
-        languages: ["TypeScript", "TSX", "Node.js"],
+        languages: ["TypeScript", "TSX"],
+        frameworks: ["Next.js", "React", "Node.js"],
       },
       {
         name: "devfit-lab",
@@ -337,6 +362,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 22910,
         deletions: 10820,
         languages: ["TypeScript", "Python"],
+        frameworks: ["Next.js", "FastAPI"],
       },
       {
         name: "internal-ai-tools",
@@ -344,6 +370,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 22050,
         deletions: 10190,
         languages: ["Python", "TypeScript"],
+        frameworks: ["FastAPI", "LangChain"],
       },
     ],
     recentCommitMessages: [
@@ -368,6 +395,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 19820,
         deletions: 8820,
         languages: ["TypeScript", "TSX", "Python"],
+        frameworks: ["Next.js", "React"],
       },
       {
         name: "tour-pacific-api",
@@ -375,6 +403,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 16210,
         deletions: 7420,
         languages: ["Python", "SQL"],
+        frameworks: ["Django", "Django REST Framework", "PostgreSQL"],
       },
       {
         name: "booking-sync",
@@ -382,6 +411,7 @@ export const DEVELOPERS: MockDeveloper[] = [
         additions: 11190,
         deletions: 4990,
         languages: ["Python", "TypeScript"],
+        frameworks: ["Odoo", "Celery"],
       },
     ],
     recentCommitMessages: [
