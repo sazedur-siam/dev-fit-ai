@@ -4,7 +4,8 @@ import { getAllDevelopers } from "@/lib/db/developers";
 import { saveAnalysis } from "@/lib/db/analyses";
 import { resolveCredentials } from "@/lib/credentials";
 import { requireUser, statusForError } from "@/lib/session";
-import type { AppUser } from "@/lib/types";
+import { parseJsonBody, RepoUrlBodySchema } from "@/lib/schemas";
+import type { AppUser, FitResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,17 +27,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: statusForError(err) });
   }
 
-  let body: { repoUrl?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  const repoUrl = body?.repoUrl?.trim();
-  if (!repoUrl) {
-    return NextResponse.json({ error: "repoUrl is required" }, { status: 400 });
-  }
+  const body = await parseJsonBody(req, RepoUrlBodySchema);
+  if (!body.ok) return body.response;
+  const { repoUrl } = body.data;
 
   try {
     const creds = await resolveCredentials(user);
@@ -67,7 +60,7 @@ export async function POST(req: Request) {
       analysisId = null;
     }
 
-    return NextResponse.json({
+    const response: FitResponse = {
       requirement: result.requirement,
       ranked: result.ranked,
       topPickId: result.topPickId,
@@ -77,7 +70,8 @@ export async function POST(req: Request) {
         gemini: creds.geminiSource,
         github: creds.githubSource,
       },
-    });
+    };
+    return NextResponse.json(response);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Fit ranking failed";
     const status = /^GitHub 4\d\d/.test(message) ? 400 : 500;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createUser } from "@/lib/db/users";
 import { isAuthConfigured } from "@/lib/auth";
 import { checkRegister, clientIp } from "@/lib/rateLimit";
+import { parseJsonBody, RegisterBodySchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,20 +39,10 @@ export async function POST(req: Request) {
     console.error("[register] rate limit check failed:", err);
   }
 
-  let body: { email?: unknown; password?: unknown; confirmPassword?: unknown };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
+  const body = await parseJsonBody(req, RegisterBodySchema);
+  if (!body.ok) return body.response;
 
-  const { email, password, confirmPassword } = body;
-  if (typeof email !== "string" || typeof password !== "string") {
-    return NextResponse.json(
-      { error: "email and password are required" },
-      { status: 400 }
-    );
-  }
+  const { email, password, confirmPassword } = body.data;
   if (password !== confirmPassword) {
     return NextResponse.json({ error: "Passwords don't match." }, { status: 400 });
   }

@@ -76,6 +76,7 @@ orchestrator and the only place that composes all of the above.
 | Path | Role |
 | --- | --- |
 | [src/lib/types.ts](src/lib/types.ts) | All shared types. Start here. |
+| [src/lib/schemas.ts](src/lib/schemas.ts) | Zod schemas: lenient for Gemini output, strict for request bodies; `parseJsonBody()`. |
 | [src/lib/auth.ts](src/lib/auth.ts) | NextAuth options: Credentials + optional Google provider, JWT callbacks. |
 | [src/lib/session.ts](src/lib/session.ts) | `requireUser` / `requireAdmin` — the authorization boundary. |
 | [src/lib/crypto.ts](src/lib/crypto.ts) | AES-256-GCM seal/open + masking for stored keys. |
@@ -331,29 +332,22 @@ Both unblock only when the upstream plugins ship support. Re-check with
 - Next 16 bundles its own docs at `node_modules/next/dist/docs/` — consult those
   rather than guessing at v16 API shapes.
 
-## Known drift
+## Implementation notes
 
-`FitRanking` in [src/lib/types.ts](src/lib/types.ts) is **dead** — nothing imports
-it, and it's already out of date: `/api/fit` returns `analyzeAndRank()`'s shape,
-which adds `topPickRationale`. The client re-declares that shape locally as
-`FitResponse` in [src/app/fit/page.tsx](src/app/fit/page.tsx). So the API contract
-lives in three places and only two agree. If you touch the fit response, either
-delete `FitRanking` or make it the single source of truth and import it on both
-sides — don't add a fourth copy.
-
-Smaller notes:
-
+- **The `/api/fit` contract is declared once:** `FitResponse` in
+  [types.ts](src/lib/types.ts). The route builds a value of that type and
+  [FitView.tsx](src/components/FitView.tsx) imports it. Change it there and both
+  sides follow; never re-declare it locally. (`FitRanking`, the old dead copy, is
+  gone.)
 - `buildRepoDigest()` fetches the up-to-20 files **sequentially** in a `for` loop.
   That's the main latency cost of a request (5–20s end to end). Safe to parallelize
   with `Promise.all`, just mind the rate limit.
-- `/developer/[id]` is prerendered via `generateStaticParams()`, so **editing
-  `src/data/developers.ts` requires a rebuild** to show up in a production build.
-- [src/app/fit/page.tsx](src/app/fit/page.tsx) is the only client component. It
-  fetches `/api/developers` separately from `/api/fit` purely to get names and
-  archetypes for display — the fit response carries IDs only.
+- `FitView` fetches `/api/developers` separately from `/api/fit` purely to get names
+  and archetypes for display; the fit response carries IDs only.
 - Gemini JSON parsing retries **once** with a stricter "return only JSON" reminder
-  (`geminiJSON()`), and both prompts have field-level fallbacks in the analyzer. A
-  malformed model response degrades rather than 500s.
+  (`geminiJSON()`). The reply is then run through a lenient schema
+  (`coerceRequirement()` / `coerceExplanations()` in the analyzer), so a malformed
+  model response degrades to defaults rather than 500s.
 
 ## Design system
 
@@ -439,7 +433,12 @@ stylesheet may not have loaded by the time it renders.
   `getServerSession`; `signIn`/`signOut` don't need a provider (only `useSession`
   does), so no session-polling JS ships. Don't add `useSession` without weighing
   that.
-- Route handlers validate input and return `{ error: string }` with a 4xx/5xx.
+- Route handlers validate bodies with `parseJsonBody(req, Schema)` from
+  [schemas.ts](src/lib/schemas.ts), which returns the parsed data or a ready 400
+  with `{ error }` set to the schema's message (those messages are shown to users,
+  so write them for people). Errors are `{ error: string }` with a 4xx/5xx.
+  **Model output gets the opposite treatment:** every field `.catch()`es to a
+  default, because a bad Gemini reply must degrade, not fail.
   Errors matching `/^GitHub 4\d\d/` map to 400, everything else to 500.
 - Keep the disclaimer in the UI. Commit counts and language overlap are proxies for
   skill, not proof of it; the app is decision support for a human, not a pass/fail

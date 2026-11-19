@@ -611,8 +611,6 @@ attribution traps that produce confident-but-wrong numbers.
   latency win.
 - Stream results so the requirement renders before the explanations finish.
 - Cache digests and requirements per commit SHA to avoid repeat model spend.
-- Make `FitRanking` the single source of truth for the `/api/fit` contract
-  (it is currently dead code that has already drifted).
 - Retry/backoff on Gemini `503 high demand`.
 
 ---

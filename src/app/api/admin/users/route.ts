@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createUser, listUsers } from "@/lib/db/users";
 import { getKeyPresenceByUser } from "@/lib/db/keys";
 import { requireAdmin, statusForError } from "@/lib/session";
-import type { Role } from "@/lib/types";
+import { AdminCreateUserBodySchema, parseJsonBody } from "@/lib/schemas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,27 +38,14 @@ export async function POST(req: Request) {
   try {
     await requireAdmin();
 
-    let body: { email?: unknown; password?: unknown; name?: unknown; role?: unknown };
-    try {
-      body = await req.json();
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-    }
-
-    if (typeof body.email !== "string" || typeof body.password !== "string") {
-      return NextResponse.json(
-        { error: "email and password are required" },
-        { status: 400 }
-      );
-    }
-
-    const role: Role = body.role === "admin" ? "admin" : "project_manager";
+    const body = await parseJsonBody(req, AdminCreateUserBodySchema);
+    if (!body.ok) return body.response;
 
     const user = await createUser({
-      email: body.email,
-      password: body.password,
-      name: typeof body.name === "string" ? body.name : null,
-      role,
+      email: body.data.email,
+      password: body.data.password,
+      name: body.data.name ?? null,
+      role: body.data.role,
     });
 
     return NextResponse.json(

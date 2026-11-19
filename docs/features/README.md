@@ -21,7 +21,7 @@ tests and CLAUDE.md then describe it, and the merged PR holds the original spec.
 | --- | --- | --- | --- | --- | --- |
 | ✅ | 01 | Tests and CI | S | none | No |
 | ✅ | 02 | Rate limiting on login and register | S | none | No |
-| ⬜ | 03 | [Validate AI and GitHub responses, one fit-response type](03-validation-and-logging.md) | S | 01 | No |
+| ✅ | 03 | Validate AI and GitHub responses, one fit-response type | S | 01 | No |
 | ⬜ | 04 | [Faster repo digest and a digest cache](04-repo-digest-cache.md) | S | none | No |
 | ⬜ | 05 | [Scoring version on every analysis](05-scoring-version.md) | S | 01 | No |
 | ⬜ | 06 | [Score frameworks separately from languages](06-stack-score.md) | M | 01, 05 | No |

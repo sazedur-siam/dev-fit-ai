@@ -1,24 +1,63 @@
 import { buildRepoDigest } from "@/lib/github";
 import { geminiJSON } from "@/lib/gemini";
 import type {
-  Archetype,
-  Complexity,
+  AnalyzeAndRankResult,
   DeveloperView,
   FitScore,
   GeminiExplanationResponse,
   RepoRequirement,
 } from "@/lib/types";
 import { rankCohort } from "@/lib/scoring";
+import { ExplanationResponseSchema, RawRequirementSchema } from "@/lib/schemas";
 import type { ResolvedCredentials } from "@/lib/credentials";
-
-const ARCHETYPES: Archetype[] = ["frontend", "backend", "fullstack"];
-const COMPLEXITIES: Complexity[] = ["low", "moderate", "high"];
 
 function fallbackLanguagesFromBytes(bytes: Record<string, number>): string[] {
   return Object.entries(bytes)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 6)
     .map(([lang]) => lang);
+}
+
+/**
+ * Turn Gemini's raw reply into a complete RepoRequirement. Never throws: every
+ * field has a schema default, and the two that need repo context (languages,
+ * summary) fall back to the language byte counts and the repo name.
+ */
+export function coerceRequirement(
+  raw: unknown,
+  ctx: { languageBytes: Record<string, number>; repoLabel: string }
+): RepoRequirement {
+  const parsed = RawRequirementSchema.parse(raw);
+  return {
+    ...parsed,
+    languages:
+      parsed.languages.length > 0
+        ? parsed.languages
+        : fallbackLanguagesFromBytes(ctx.languageBytes),
+    summary: parsed.summary || `Repository ${ctx.repoLabel}.`,
+  };
+}
+
+/**
+ * Turn Gemini's raw explanation reply into exactly one explanation per ranked
+ * developer, in ranking order. Missing or unknown entries get a neutral default.
+ */
+export function coerceExplanations(
+  raw: unknown,
+  ranked: Pick<FitScore, "devId">[]
+): GeminiExplanationResponse {
+  const parsed = ExplanationResponseSchema.parse(raw);
+  const byId = new Map(parsed.explanations.map((e) => [e.devId, e.explanation]));
+  return {
+    explanations: ranked.map((r) => ({
+      devId: r.devId,
+      explanation:
+        byId.get(r.devId) ||
+        "No explanation generated. Fit is based on the deterministic sub-scores.",
+    })),
+    topPickRationale:
+      parsed.topPickRationale || "Top pick chosen by highest overall score.",
+  };
 }
 
 /** Ask Gemini for a RepoRequirement given a digest. Applies safe defaults. */
@@ -53,35 +92,11 @@ Rules:
 ${digestObj.digest}
 --- DIGEST END ---`;
 
-  const raw = await geminiJSON<Partial<RepoRequirement>>(
-    prompt,
-    creds.geminiApiKey
-  );
-
-  // Coerce & fill defaults
-  const languages = Array.isArray(raw.languages) && raw.languages.length > 0
-    ? raw.languages.map(String)
-    : fallbackLanguagesFromBytes(digestObj.languageBytes);
-
-  const stack = Array.isArray(raw.stack) ? raw.stack.map(String) : [];
-  const archetype = ARCHETYPES.includes(raw.primaryArchetypeNeeded as Archetype)
-    ? (raw.primaryArchetypeNeeded as Archetype)
-    : "fullstack";
-  const complexity = COMPLEXITIES.includes(raw.complexity as Complexity)
-    ? (raw.complexity as Complexity)
-    : "moderate";
-
-  const requirement: RepoRequirement = {
-    stack,
-    languages,
-    primaryArchetypeNeeded: archetype,
-    domain: typeof raw.domain === "string" ? raw.domain : "(unknown domain)",
-    complexity,
-    summary:
-      typeof raw.summary === "string" && raw.summary.trim().length > 0
-        ? raw.summary
-        : `Repository ${digestObj.owner}/${digestObj.repo}.`,
-  };
+  const raw = await geminiJSON<unknown>(prompt, creds.geminiApiKey);
+  const requirement = coerceRequirement(raw, {
+    languageBytes: digestObj.languageBytes,
+    repoLabel: `${digestObj.owner}/${digestObj.repo}`,
+  });
 
   return {
     requirement,
@@ -152,31 +167,8 @@ Rules:
 - Never contradict the numeric verdict.
 - Be specific. No filler ("This developer would be a great addition"). Aim for review-caliber sharpness.`;
 
-  const raw = await geminiJSON<Partial<GeminiExplanationResponse>>(
-    prompt,
-    creds.geminiApiKey
-  );
-  const explanations = Array.isArray(raw.explanations) ? raw.explanations : [];
-  const explanationById = new Map(
-    explanations
-      .filter((e) => e && typeof e.devId === "string")
-      .map((e) => [e.devId as string, String(e.explanation ?? "")])
-  );
-
-  const filled: GeminiExplanationResponse["explanations"] = ranked.map((r) => ({
-    devId: r.devId,
-    explanation:
-      explanationById.get(r.devId) ||
-      "No explanation generated. Fit is based on the deterministic sub-scores.",
-  }));
-
-  return {
-    explanations: filled,
-    topPickRationale:
-      typeof raw.topPickRationale === "string" && raw.topPickRationale.trim()
-        ? raw.topPickRationale
-        : "Top pick chosen by highest overall score.",
-  };
+  const raw = await geminiJSON<unknown>(prompt, creds.geminiApiKey);
+  return coerceExplanations(raw, ranked);
 }
 
 /** End-to-end: repoUrl → RepoRequirement + ranked FitScore[] + topPickId. */
@@ -184,7 +176,7 @@ export async function analyzeAndRank(
   repoUrl: string,
   cohort: DeveloperView[],
   creds: ResolvedCredentials
-) {
+): Promise<AnalyzeAndRankResult> {
   const { requirement, digestMeta } = await analyzeRepo(repoUrl, creds);
   const rankedBase = rankCohort(cohort, requirement);
   const { explanations, topPickRationale } = await explainRanking(
