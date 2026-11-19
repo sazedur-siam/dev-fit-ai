@@ -156,10 +156,30 @@ export interface FitScore {
   explanation: string;
 }
 
-export interface FitRanking {
+/** Which credential a request actually used: the user's own, the server's, or none. */
+export type CredentialSource = "user" | "env" | "none";
+
+/** What `analyzeAndRank()` returns: the ranking plus where the repo came from. */
+export interface AnalyzeAndRankResult {
   requirement: RepoRequirement;
   ranked: FitScore[];
   topPickId: string;
+  topPickRationale: string;
+  digestMeta: { owner: string; repo: string; fileCount: number };
+}
+
+/**
+ * The `/api/fit` response body. This is the **only** declaration of that
+ * contract: the route builds it, and FitView reads it.
+ */
+export interface FitResponse {
+  requirement: RepoRequirement;
+  ranked: FitScore[];
+  topPickId: string;
+  topPickRationale: string;
+  /** Null when saving to history failed; the ranking is still returned. */
+  analysisId: string | null;
+  credentialSources: { gemini: CredentialSource; github: CredentialSource };
 }
 
 /** One repository visible to the configured GITHUB_TOKEN. */

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { analyzeRepo } from "@/lib/analyzer";
 import { resolveCredentials } from "@/lib/credentials";
 import { requireUser, statusForError } from "@/lib/session";
+import { parseJsonBody, RepoUrlBodySchema } from "@/lib/schemas";
 import type { AppUser } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -19,17 +20,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: statusForError(err) });
   }
 
-  let body: { repoUrl?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  const repoUrl = body?.repoUrl?.trim();
-  if (!repoUrl) {
-    return NextResponse.json({ error: "repoUrl is required" }, { status: 400 });
-  }
+  const body = await parseJsonBody(req, RepoUrlBodySchema);
+  if (!body.ok) return body.response;
+  const { repoUrl } = body.data;
 
   try {
     const creds = await resolveCredentials(user);

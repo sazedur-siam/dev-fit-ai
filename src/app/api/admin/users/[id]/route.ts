@@ -6,6 +6,7 @@ import {
   setUserPassword,
   setUserRole,
 } from "@/lib/db/users";
+import { AdminUpdateUserBodySchema, parseJsonBody } from "@/lib/schemas";
 import { requireAdmin, statusForError } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -19,12 +20,9 @@ export async function PATCH(req: Request, { params }: Params) {
     const admin = await requireAdmin();
     const { id } = await params;
 
-    let body: { role?: unknown; password?: unknown };
-    try {
-      body = await req.json();
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-    }
+    const parsed = await parseJsonBody(req, AdminUpdateUserBodySchema);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
 
     const target = await getUserById(id);
     if (!target) {
@@ -32,7 +30,7 @@ export async function PATCH(req: Request, { params }: Params) {
     }
 
     // Password reset. Allowed on any account, including the admin's own.
-    if (typeof body.password === "string") {
+    if (body.password !== undefined) {
       try {
         await setUserPassword(id, body.password);
       } catch (err) {
@@ -42,17 +40,13 @@ export async function PATCH(req: Request, { params }: Params) {
       return NextResponse.json({ user: target, passwordChanged: true });
     }
 
-    if (body.role !== "admin" && body.role !== "project_manager") {
-      return NextResponse.json(
-        { error: 'role must be "admin" or "project_manager"' },
-        { status: 400 }
-      );
-    }
+    // The schema guarantees a role whenever there is no password.
+    const role = body.role!;
 
     // Guard against locking everyone out of the dashboard: the last admin cannot
     // demote themselves, and self-demotion is refused outright so it is never a
     // surprise.
-    if (target.id === admin.id && body.role === "project_manager") {
+    if (target.id === admin.id && role === "project_manager") {
       return NextResponse.json(
         { error: "You cannot remove your own admin role." },
         { status: 409 }
@@ -60,7 +54,7 @@ export async function PATCH(req: Request, { params }: Params) {
     }
     if (
       target.role === "admin" &&
-      body.role === "project_manager" &&
+      role === "project_manager" &&
       (await countAdmins()) <= 1
     ) {
       return NextResponse.json(
@@ -69,7 +63,7 @@ export async function PATCH(req: Request, { params }: Params) {
       );
     }
 
-    await setUserRole(id, body.role);
+    await setUserRole(id, role);
     return NextResponse.json({ user: await getUserById(id) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not update user";

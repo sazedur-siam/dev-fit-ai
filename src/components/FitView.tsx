@@ -7,14 +7,7 @@ import { VerdictBadge } from "@/components/VerdictBadge";
 import { SubScoreBar } from "@/components/SubScoreBar";
 import { FullScreenLoader } from "@/components/FullScreenLoader";
 import { RepoPicker } from "@/components/RepoPicker";
-import type { DeveloperView, FitScore, RepoRequirement } from "@/lib/types";
-
-interface FitResponse {
-  requirement: RepoRequirement;
-  ranked: FitScore[];
-  topPickId: string;
-  topPickRationale: string;
-}
+import type { DeveloperView, FitResponse } from "@/lib/types";
 
 function isValidRepoUrl(input: string): boolean {
   return /^(?:https?:\/\/)?(?:www\.)?github\.com\/[^/\s]+\/[^/\s#?]+/i.test(

@@ -1,7 +1,7 @@
 import { readUserKey } from "@/lib/db/keys";
-import { isSelfService, type AppUser } from "@/lib/types";
+import { isSelfService, type AppUser, type CredentialSource } from "@/lib/types";
 
-export type CredentialSource = "user" | "env" | "none";
+export type { CredentialSource };
 
 export interface ResolvedCredentials {
   geminiApiKey: string | null;
