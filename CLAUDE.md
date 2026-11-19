@@ -26,6 +26,7 @@ npm run typecheck  # tsc --noEmit
 npm run lint       # eslint . (flat config)
 npm test           # vitest run (unit tests, no network, no DB)
 npm run refresh    # re-import GitHub developers that are due (nightly in CI)
+npm run suggest-aliases  # offline: propose new skills.ts aliases via Gemini embeddings
 ```
 
 `npm run seed` is **not optional** — the cohort lives in MongoDB, and without it
@@ -442,6 +443,24 @@ last 180, otherwise 30 (`nextRefreshDate()`). The loop is
    than open the cluster casually.
 3. GitHub disables schedules on repositories with no activity for 60 days;
    re-enable from the Actions tab.
+
+## Similarity (outside every score)
+
+Two features use "semantic" closeness; **neither touches `overall` or a verdict**
+(option C in the original spec, an embedding sub-score, was deliberately not built:
+it would make scores shift whenever Google changes the embedding model).
+
+- **Similar developers** on a profile ([src/lib/similarity.ts](src/lib/similarity.ts)):
+  cosine similarity of skill vectors (languages + frameworks with implications,
+  weighted by commits per repo). Deterministic and keyless, computed per page load
+  over the whole cohort (fine at tens; revisit at thousands).
+- **`npm run suggest-aliases`** ([scripts/suggest-aliases.ts](scripts/suggest-aliases.ts),
+  logic in [aliasSuggest.ts](src/lib/aliasSuggest.ts)): embeds every skill name seen in
+  analyses and developers with `geminiEmbed()` and prints unrecognised spellings close
+  to a known one as ready-to-paste `ALIASES` lines. **A human reviews them**:
+  embeddings also put "React" near "Preact". It probes `GEMINI_EMBEDDING_MODEL`
+  (default `gemini-embedding-001`) first, because model names rot. Nothing embeds
+  at request time.
 
 ## Implementation notes
 

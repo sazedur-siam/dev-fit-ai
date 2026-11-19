@@ -71,3 +71,11 @@ export const DIGEST_LIMITS = {
  * and can tolerate the narration drifting between releases.
  */
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
+
+/**
+ * Embedding model for the offline alias suggester (`npm run suggest-aliases`)
+ * only. Nothing at request time embeds anything. Model names rot here too; the
+ * script probes the model first and says so clearly if it's gone.
+ */
+export const GEMINI_EMBEDDING_MODEL =
+  process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";

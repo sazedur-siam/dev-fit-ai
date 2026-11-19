@@ -7,7 +7,8 @@ import {
   SourceBadge,
   StackTag,
 } from "@/components/ArchetypeBadge";
-import { getDeveloperById } from "@/lib/db/developers";
+import { getAllDevelopers } from "@/lib/db/developers";
+import { similarDevelopers } from "@/lib/similarity";
 import { getCurrentUser } from "@/lib/session";
 
 /**
@@ -39,8 +40,11 @@ export default async function DeveloperDetailPage({
   if (!user) redirect("/login");
 
   const { id } = await params;
-  const dev = await getDeveloperById(id);
+  // The whole cohort is needed for "similar developers"; it's small (tens).
+  const cohort = await getAllDevelopers();
+  const dev = cohort.find((d) => d.id === id);
   if (!dev) return notFound();
+  const similar = similarDevelopers(dev, cohort, 3);
   const net = dev.linesAdded - dev.linesDeleted;
 
   return (
@@ -134,6 +138,40 @@ export default async function DeveloperDetailPage({
         <Stat label="Lines added" value={dev.linesAdded.toLocaleString()} />
         <Stat label="Net lines" value={`+${net.toLocaleString()}`} />
       </section>
+
+      {similar.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-lg font-bold text-heading">Similar developers</h2>
+          <p className="mt-1 text-xs text-muted">
+            By overlap in languages and frameworks, weighted by commits. For finding a
+            backup or a pair; it plays no part in any fit score.
+          </p>
+          <ul className="mt-3 grid gap-3 sm:grid-cols-3">
+            {similar.map((s) => (
+              <li key={s.id}>
+                <Link
+                  href={`/developer/${s.id}`}
+                  className="block h-full rounded-2xl border border-line bg-surface p-4 shadow-card transition hover:border-accent-line hover:shadow-card-hover"
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate font-semibold text-heading">{s.name}</span>
+                    <span className="shrink-0 font-mono text-xs tabular-nums text-accent-soft-fg">
+                      {Math.round(s.similarity * 100)}%
+                    </span>
+                  </div>
+                  {s.shared.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {s.shared.slice(0, 4).map((k) => (
+                        <StackTag key={k}>{k}</StackTag>
+                      ))}
+                    </div>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="mt-8">
         <h2 className="text-lg font-bold text-heading">Repositories</h2>

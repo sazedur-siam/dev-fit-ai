@@ -8,7 +8,7 @@
  */
 
 /** Lowercase, drop "(…)" asides and trailing versions, strip spaces/dots/dashes. */
-function compact(raw: string): string {
+export function compact(raw: string): string {
   return raw
     .toLowerCase()
     .replace(/\(.*?\)/g, " ")
@@ -73,6 +73,11 @@ const IMPLIES: Record<string, string[]> = {
   fastify: ["nodejs"],
   woocommerce: ["wordpress"],
 };
+
+/** Whether the alias table recognises this spelling. */
+export function isKnownSkill(raw: string): boolean {
+  return Object.prototype.hasOwnProperty.call(ALIASES, compact(raw));
+}
 
 /** Canonical id for a skill name. Unknown names fall back to their compact form. */
 export function canonicalSkill(raw: string): string {

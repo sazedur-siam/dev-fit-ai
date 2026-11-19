@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "seed": "node scripts/seed.mjs",
-    "refresh": "tsx scripts/refresh-developers.ts"
+    "refresh": "tsx scripts/refresh-developers.ts",
+    "suggest-aliases": "tsx scripts/suggest-aliases.ts"
   },
   "dependencies": {
     "bcryptjs": "3.0.3",
