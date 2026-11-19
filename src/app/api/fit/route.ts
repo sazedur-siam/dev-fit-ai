@@ -5,6 +5,7 @@ import { saveAnalysis } from "@/lib/db/analyses";
 import { resolveCredentials } from "@/lib/credentials";
 import { requireUser, statusForError } from "@/lib/session";
 import { parseJsonBody, RepoUrlBodySchema } from "@/lib/schemas";
+import { SCORING_VERSION } from "@/lib/config";
 import type { AppUser, FitResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -66,6 +67,7 @@ export async function POST(req: Request) {
       topPickId: result.topPickId,
       topPickRationale: result.topPickRationale,
       analysisId,
+      scoringVersion: SCORING_VERSION,
       credentialSources: {
         gemini: creds.geminiSource,
         github: creds.githubSource,

@@ -109,8 +109,19 @@ overall = 0.40*stackOverlap + 0.35*archetypeMatch + 0.25*experienceDepth
 verdict = overall >= 75 ? "fit" : overall >= 55 ? "ramp-up" : "not fit"
 ```
 
-Weights and thresholds live in [src/lib/config.ts](src/lib/config.ts). Two behaviours
-that look like bugs but are deliberate, and one that is a genuine wart:
+Weights and thresholds live in [src/lib/config.ts](src/lib/config.ts).
+
+**Scoring is versioned.** `SCORING_VERSION` in config.ts is stamped on every saved
+analysis by `saveAnalysis()` (legacy documents read back as `"0"`) and returned on
+`/api/fit`. History marks rankings from an older formula and links to a re-run
+(`/fit?repo=…` pre-fills the form). **Bump it on any change to a weight, threshold,
+archetype score or sub-score formula.** [config.test.ts](src/lib/config.test.ts)
+fingerprints the constants per version and fails CI if they change under an
+unchanged version; its failure message gives the line to add. It can't see a
+formula change inside scoring.ts, so that bump is on you.
+
+Two behaviours that look like bugs but are deliberate, and one that is a genuine
+wart:
 
 - `experienceDepth` is **cohort-relative** (percentile of `totalCommits`, blended
   70/30 with normalized net lines). Adding or removing a seed developer shifts

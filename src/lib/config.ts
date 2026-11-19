@@ -3,6 +3,14 @@
  * one file and see how the score is composed.
  */
 
+/**
+ * Stamped on every saved analysis, so a stored ranking always says which formula
+ * produced it. **Bump it on any change to the weights, thresholds or archetype
+ * scores below, or to a sub-score formula in scoring.ts.** `config.test.ts`
+ * fingerprints the constants and fails if they change under an unchanged version.
+ */
+export const SCORING_VERSION = "1.0.0";
+
 export const SCORING_WEIGHTS = {
   stackOverlap: 0.40,
   archetypeMatch: 0.35,

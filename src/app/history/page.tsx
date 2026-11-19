@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { listUserAnalyses } from "@/lib/db/analyses";
 import { VerdictBadge } from "@/components/VerdictBadge";
+import { SCORING_VERSION } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,7 @@ export default async function HistoryPage() {
         <ul className="mt-6 space-y-3">
           {analyses.map((a) => {
             const top = a.ranked.find((r) => r.devId === a.topPickId) ?? a.ranked[0];
+            const outdated = a.scoringVersion !== SCORING_VERSION;
             return (
               <li
                 key={a.id}
@@ -63,6 +65,21 @@ export default async function HistoryPage() {
                       <Meta>{a.requirement.complexity} complexity</Meta>
                       <Meta>{a.createdAt.slice(0, 10)}</Meta>
                     </div>
+                    {outdated && (
+                      <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-warn-fg">
+                        <span>
+                          Scored with an older formula
+                          {a.scoringVersion === "0" ? "" : ` (v${a.scoringVersion})`}. The
+                          numbers may differ today.
+                        </span>
+                        <Link
+                          href={`/fit?repo=${encodeURIComponent(a.repoUrl)}`}
+                          className="font-bold underline underline-offset-4 hover:text-heading"
+                        >
+                          Re-run with v{SCORING_VERSION}
+                        </Link>
+                      </p>
+                    )}
                   </div>
 
                   {top && (

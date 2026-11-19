@@ -1,4 +1,5 @@
 import { ObjectId, type WithId } from "mongodb";
+import { SCORING_VERSION } from "@/lib/config";
 import { COLLECTIONS, getDb } from "@/lib/mongodb";
 import type { FitScore, RepoRequirement, StoredAnalysis } from "@/lib/types";
 
@@ -11,6 +12,8 @@ interface AnalysisDoc {
   ranked: FitScore[];
   topPickId: string;
   topPickRationale: string;
+  /** Absent on documents saved before scoring was versioned. */
+  scoringVersion?: string;
   createdAt: Date;
 }
 
@@ -28,17 +31,20 @@ function toStored(doc: WithId<AnalysisDoc>): StoredAnalysis {
     ranked: doc.ranked,
     topPickId: doc.topPickId,
     topPickRationale: doc.topPickRationale,
+    scoringVersion: doc.scoringVersion ?? "0",
     createdAt: doc.createdAt.toISOString(),
   };
 }
 
+/** Stamps the current SCORING_VERSION itself, so no caller can forget it. */
 export async function saveAnalysis(
   userId: string,
-  input: Omit<AnalysisDoc, "userId" | "createdAt">
+  input: Omit<AnalysisDoc, "userId" | "createdAt" | "scoringVersion">
 ): Promise<string> {
   const col = await analyses();
   const res = await col.insertOne({
     ...input,
+    scoringVersion: SCORING_VERSION,
     userId,
     createdAt: new Date(),
   });
