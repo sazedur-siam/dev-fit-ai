@@ -66,4 +66,7 @@ export const COLLECTIONS = {
   repoDigests: "repoDigests",
   repoRequirements: "repoRequirements",
   refreshRuns: "refreshRuns",
+  notes: "notes",
+  tags: "tags",
+  shortlists: "shortlists",
 } as const;

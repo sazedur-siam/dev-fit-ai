@@ -7,6 +7,7 @@ import { VerdictBadge } from "@/components/VerdictBadge";
 import { SubScoreBar } from "@/components/SubScoreBar";
 import { FullScreenLoader } from "@/components/FullScreenLoader";
 import { RepoPicker } from "@/components/RepoPicker";
+import { ShortlistButton } from "@/components/ShortlistButton";
 import type {
   ClarifyingQuestion,
   DeveloperView,
@@ -373,6 +374,11 @@ export function FitView({
           data={state.data}
           developers={state.developers}
           heading={state.mode === "repo" ? "Repo requirement" : "What the work needs"}
+          sourceLabel={
+            state.mode === "repo"
+              ? repoUrl.replace(/^(https?:\/\/)?(www\.)?github\.com\//i, "").replace(/\/$/, "")
+              : needText.trim().slice(0, 60)
+          }
           topLabel={state.mode === "repo" ? "Fittest for this repo" : "Fittest for this need"}
         />
       )}
@@ -402,11 +408,14 @@ function FitResultView({
   developers,
   heading,
   topLabel,
+  sourceLabel,
 }: {
   data: FitResponse;
   developers: DeveloperView[];
   heading: string;
   topLabel: string;
+  /** Suggested name for a new shortlist made from these results. */
+  sourceLabel: string;
 }) {
   const devById = new Map(developers.map((d) => [d.id, d]));
   const topPick = data.ranked.find((r) => r.devId === data.topPickId);
@@ -518,6 +527,13 @@ function FitResultView({
                     <ArchetypeBadge archetype={dev.archetype} />
                     <VerdictBadge verdict={score.verdict} />
                     {dev.aiFluency && <AiFluencyBadge fluency={dev.aiFluency} />}
+                    <div className="ml-auto">
+                      <ShortlistButton
+                        developerId={dev.id}
+                        analysisId={data.analysisId}
+                        suggestedName={sourceLabel || "Shortlist"}
+                      />
+                    </div>
                   </div>
                   <p className="mt-2.5 text-sm leading-relaxed text-body">
                     {score.explanation}

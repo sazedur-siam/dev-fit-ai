@@ -101,7 +101,7 @@ shape a repo does, so scoring has one code path; don't fork it. History stores
 | [src/lib/rateLimit.ts](src/lib/rateLimit.ts) | Login/register throttling policy; storage in `db/rateLimits.ts`. |
 | [src/lib/credentials.ts](src/lib/credentials.ts) | Resolves which key a request uses (user → env). |
 | [src/lib/mongodb.ts](src/lib/mongodb.ts) | Cached client + collection names. |
-| [src/lib/db/](src/lib/db/) | One module per collection: `users`, `keys`, `developers`, `analyses`, `rateLimits`. |
+| [src/lib/db/](src/lib/db/) | One module per collection: `users`, `keys`, `developers`, `analyses`, `rateLimits`, `repoCache`, `refreshRuns`, `notes`, `tags`, `shortlists`. |
 | [src/lib/config.ts](src/lib/config.ts) | Weights, thresholds, digest limits, model name. Tunable during a demo. |
 | [src/lib/scoring.ts](src/lib/scoring.ts) | Pure sub-scores + ranking. No I/O, no AI. |
 | [src/lib/github.ts](src/lib/github.ts) | Repo digest builder + URL parsing. |
@@ -444,6 +444,24 @@ last 180, otherwise 30 (`nextRefreshDate()`). The loop is
 3. GitHub disables schedules on repositories with no activity for 60 days;
    re-enable from the Actions tab.
 
+## Workspace: notes, tags, shortlists
+
+Per-user and **private, admins included**, the same stance as stored keys. Each
+collection has its own module ([db/notes.ts](src/lib/db/notes.ts),
+[db/tags.ts](src/lib/db/tags.ts), [db/shortlists.ts](src/lib/db/shortlists.ts)) and
+**every query filters by `userId`**, so another user's document id is a 404, never
+a 403 that confirms it exists. `deleteUser()` removes all three with the account.
+[workspace.test.ts](src/lib/workspace.test.ts) pins the cross-user cases against an
+in-memory collection stand-in; keep it passing when touching these modules.
+
+- Tags are normalised (trimmed, lowercased, spaces → hyphens, `[a-z0-9._-]`) and
+  unique per (user, developer, label); adding twice is a no-op. The developers list
+  filters by your tags.
+- A shortlist update is a rename, one `add`, or one `remove`: `$addToSet` and
+  `$pull` can't hit the same field in one Mongo update, so the schema refuses both.
+- UI: `DeveloperWorkspace` on `/developer/[id]`, `ShortlistButton` on fit results
+  (a new list there records the `analysisId`), `ShortlistsManager` on `/shortlists`.
+
 ## Similarity (outside every score)
 
 Two features use "semantic" closeness; **neither touches `overall` or a verdict**
@@ -559,7 +577,8 @@ stylesheet may not have loaded by the time it renders.
 - Server-first. Every `page.tsx` is a **server** component; interactivity lives in
   `src/components/*` client components: `AppShell`, `ThemeToggle`, `FitView`,
   `DeveloperBrowser`, `RepoPicker`, `KeyManager`, `AdminUserTable`, `LoginForm`,
-  `RegisterForm`, `AuthButtons`. Pages fetch and guard, clients render and mutate — `/fit`
+  `RegisterForm`, `AuthButtons`, `AdminDevelopers`, `DeveloperWorkspace`, `ShortlistButton`,
+  `ShortlistsManager`. Pages fetch and guard, clients render and mutate — `/fit`
   follows this too (the form is `FitView`). `Logo`, `ArchetypeBadge`,
   `VerdictBadge`, `SubScoreBar`, `DeveloperCard` and `FullScreenLoader` are
   server components; keep them that way (`Logo` avoids `useId()` for exactly

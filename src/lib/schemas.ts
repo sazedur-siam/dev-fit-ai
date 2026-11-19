@@ -158,6 +158,57 @@ export const ImportDeveloperBodySchema = z.object({
   archetype: z.enum(["auto", "frontend", "backend", "fullstack"]).optional().catch("auto"),
 });
 
+// ───────────────────────── Workspace ─────────────────────────
+
+export const NoteBodySchema = z.object({
+  body: z
+    .string({ error: "Write something first." })
+    .trim()
+    .min(1, { error: "Write something first." })
+    .max(5000, { error: "Notes are limited to 5,000 characters." }),
+});
+
+/** Tags are normalised: trimmed, lowercased, spaces become hyphens. */
+export const TagBodySchema = z.object({
+  label: z
+    .string({ error: "Tag is required." })
+    .transform((l) => l.trim().toLowerCase().replace(/\s+/g, "-"))
+    .pipe(
+      z
+        .string()
+        .min(1, { error: "Tag is required." })
+        .max(40, { error: "Tags are limited to 40 characters." })
+        .regex(/^[a-z0-9][a-z0-9._-]*$/, {
+          error: "Tags can use letters, numbers, and - _ .",
+        })
+    ),
+});
+
+const shortlistName = z
+  .string({ error: "Name the shortlist." })
+  .trim()
+  .min(1, { error: "Name the shortlist." })
+  .max(80, { error: "Shortlist names are limited to 80 characters." });
+
+export const ShortlistCreateSchema = z.object({
+  name: shortlistName,
+  analysisId: z.string().max(64).nullish(),
+  developerIds: z.array(z.string().max(100)).max(50).optional(),
+});
+
+export const ShortlistUpdateSchema = z
+  .object({
+    name: shortlistName.optional(),
+    add: z.string().max(100).optional(),
+    remove: z.string().max(100).optional(),
+  })
+  .refine((b) => b.name !== undefined || b.add !== undefined || b.remove !== undefined, {
+    error: "Nothing to change.",
+  })
+  .refine((b) => !(b.add !== undefined && b.remove !== undefined), {
+    error: "Add or remove one developer at a time.",
+  });
+
 const ROLE_ERROR = 'role must be "admin" or "project_manager"';
 
 /** Either a password reset or a role change. */

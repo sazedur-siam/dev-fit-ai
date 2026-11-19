@@ -269,3 +269,24 @@ export interface GeminiExplanationResponse {
   explanations: { devId: string; explanation: string }[];
   topPickRationale: string;
 }
+
+// ───────────────────────── Workspace (private to each user) ─────────────────────────
+
+/** A private note one user wrote about one developer. */
+export interface DeveloperNote {
+  id: string;
+  developerId: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A named list of developers, optionally tied to the analysis that produced it. */
+export interface Shortlist {
+  id: string;
+  name: string;
+  analysisId: string | null;
+  developerIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
