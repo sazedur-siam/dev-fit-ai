@@ -24,15 +24,23 @@ npm run dev        # http://localhost:3000 (Turbopack)
 npm run build      # prod build; also typechecks
 npm run typecheck  # tsc --noEmit
 npm run lint       # eslint . (flat config)
+npm test           # vitest run (unit tests, no network, no DB)
 ```
 
 `npm run seed` is **not optional** — the cohort lives in MongoDB, and without it
 `/` shows an empty state and `/api/fit` returns 503. It is idempotent (upserts on
 the business `id`), so re-running it updates rather than duplicating.
 
-There is **no test runner configured** — no Jest/Vitest/Playwright, no test files.
-`npm run build` + `npm run typecheck` are the only automated gates. If you add
-tests, you are introducing the harness, so pick one and say so.
+**Tests are Vitest**, configured in [vitest.config.mts](vitest.config.mts) (`.mts`
+because the package isn't `"type": "module"`), which mirrors the `@/` alias. Test
+files sit next to the code as `src/**/*.test.ts` and must not touch the network or
+MongoDB: mock the DB module or test the pure function. [scoring.test.ts](src/lib/scoring.test.ts)
+pins the determinism guarantee and the verdict edges (including `74.96` → `"ramp-up"`).
+
+**CI** ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs lint, typecheck,
+test and build on every PR and on pushes to `main`. The build step runs with **no
+secrets**, which is what enforces the "never throw at module scope for a missing env
+var" rule below.
 
 ## The one invariant that matters
 
