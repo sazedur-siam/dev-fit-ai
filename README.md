@@ -435,7 +435,9 @@ There is no `middleware.ts`/`proxy.ts` — see [Authentication & roles](#authent
 repoUrl
   │
   ├─ parseRepoUrl()          validate + extract owner/repo
-  ├─ buildRepoDigest()       3 REST calls + up to 20 raw file reads
+  ├─ getRepoHead()           repo metadata + head commit SHA
+  ├─ [cache]                 public repos: reuse requirement / digest for this SHA
+  ├─ buildRepoDigest()       tree + languages + up to 20 raw file reads (5 at a time)
   │                          → tree listing + inlined key files + language bytes
   ├─ analyzeRepo()           ── Gemini call #1 ──▶ RepoRequirement
   │                             (stack, languages, archetype, domain, complexity)
@@ -447,8 +449,9 @@ repoUrl
 ```
 
 `analyzeAndRank()` in `src/lib/analyzer.ts` is the only place that composes the
-full pipeline. A typical request takes **5–30 seconds**, dominated by the
-sequential file reads in the digest step.
+full pipeline. A cold request takes roughly **5–20 seconds**, mostly the two
+Gemini calls. Re-running a public repo at the same commit skips the digest and the
+first Gemini call.
 
 Digest selection is scored, not arbitrary: config files and READMEs are ranked
 above bulk source, `node_modules`/`dist`/binaries are dropped, and each file is
@@ -560,8 +563,8 @@ can be tuned without touching the engine.
   probe a candidate with a real `generateContent` call before adopting it.
 - **Nothing is statically prerendered.** Every route is dynamic, because the cohort
   and the session are both read per request.
-- **GitHub rate limits.** Unauthenticated is 60 req/hr and one digest spends 3 of
-  those (repo meta, tree, languages). File reads hit
+- **GitHub rate limits.** Unauthenticated is 60 req/hr and an uncached run spends 4
+  of those (repo meta, head SHA, tree, languages); a cached run spends 2. File reads hit
   `raw.githubusercontent.com`, which doesn't draw on that quota. `GITHUB_TOKEN`
   raises the cap to 5,000/hr.
 - **Unit tests only.** Vitest covers the pure modules (scoring, crypto); there are
@@ -607,10 +610,7 @@ attribution traps that produce confident-but-wrong numbers.
 - Save and diff requirement profiles across repos.
 
 **Engineering**
-- Parallelize the digest file reads with `Promise.all` — the single biggest
-  latency win.
 - Stream results so the requirement renders before the explanations finish.
-- Cache digests and requirements per commit SHA to avoid repeat model spend.
 - Retry/backoff on Gemini `503 high demand`.
 
 ---
