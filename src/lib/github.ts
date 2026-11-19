@@ -57,6 +57,15 @@ export interface RepoDigest {
   languageBytes: Record<string, number>;
 }
 
+/** Where a repo's default branch currently points, plus what the digest needs. */
+export interface RepoHead {
+  defaultBranch: string;
+  /** Commit SHA the default branch points at. The digest is built at this SHA. */
+  sha: string;
+  description: string | null;
+  isPrivate: boolean;
+}
+
 interface GitHubTreeEntry {
   path: string;
   type: "blob" | "tree";
@@ -93,8 +102,14 @@ function ghHeaders(token?: string | null): HeadersInit {
   return headers;
 }
 
-async function gh<T>(path: string, token?: string | null): Promise<T> {
-  const res = await fetch(`${GH_BASE}${path}`, { headers: ghHeaders(token) });
+async function ghFetch(
+  path: string,
+  token?: string | null,
+  accept?: string
+): Promise<Response> {
+  const headers = ghHeaders(token) as Record<string, string>;
+  if (accept) headers.Accept = accept;
+  const res = await fetch(`${GH_BASE}${path}`, { headers });
   if (!res.ok) {
     const body = await res.text();
     throw new GitHubError(
@@ -102,8 +117,31 @@ async function gh<T>(path: string, token?: string | null): Promise<T> {
       res.status
     );
   }
-  return res.json() as Promise<T>;
+  return res;
 }
+
+async function gh<T>(path: string, token?: string | null): Promise<T> {
+  return (await ghFetch(path, token)).json() as Promise<T>;
+}
+
+/**
+ * Run `fn` over `items` at most `size` at a time, keeping input order in the
+ * output. Used for raw file reads: all-at-once would trip GitHub's secondary
+ * rate limit on big digests, one-at-a-time was the main latency cost.
+ */
+export async function mapInBatches<T, R>(
+  items: T[],
+  size: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const out: R[] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(...(await Promise.all(items.slice(i, i + size).map(fn))));
+  }
+  return out;
+}
+
+const FILE_FETCH_CONCURRENCY = 5;
 
 interface GitHubRepoPayload {
   full_name: string;
@@ -237,11 +275,11 @@ function scoreFile(e: GitHubTreeEntry): number {
 async function fetchRawFile(
   owner: string,
   repo: string,
-  branch: string,
+  ref: string, // branch name or commit SHA
   path: string,
   token?: string | null
 ): Promise<string> {
-  const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
+  const url = `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}`;
   const res = await fetch(url, {
     headers: {
       "User-Agent": "devfit",
@@ -257,24 +295,57 @@ async function fetchRawFile(
 }
 
 /**
+ * Two cheap calls: repo metadata, then the default branch's head commit SHA
+ * (the `sha` media type returns just the 40-char string). The SHA is the cache
+ * key for the digest, and pins every later read to one snapshot.
+ */
+export async function getRepoHead(
+  owner: string,
+  repo: string,
+  token?: string | null
+): Promise<RepoHead> {
+  const meta = await gh<{
+    default_branch: string;
+    description?: string | null;
+    private?: boolean;
+  }>(`/repos/${owner}/${repo}`, token);
+  const shaRes = await ghFetch(
+    `/repos/${owner}/${repo}/commits/${meta.default_branch}`,
+    token,
+    "application/vnd.github.sha"
+  );
+  const sha = (await shaRes.text()).trim();
+  return {
+    defaultBranch: meta.default_branch,
+    sha,
+    description: meta.description ?? null,
+    // Unknown counts as private: the safe side for caching decisions.
+    isPrivate: meta.private !== false,
+  };
+}
+
+/**
  * Build the repo digest string sent to Gemini for analysis. See spec Step 1.
+ * Everything is read at `head.sha`, not the branch name, so a push landing
+ * mid-build can't mix two versions of the repo.
  */
 export async function buildRepoDigest(
-  repoUrl: string,
+  owner: string,
+  repo: string,
+  head: RepoHead,
   token?: string | null
 ): Promise<RepoDigest> {
-  const { owner, repo } = parseRepoUrl(repoUrl);
+  const { defaultBranch, sha } = head;
 
-  const meta = await gh<{ default_branch: string; description?: string | null }>(
-    `/repos/${owner}/${repo}`,
-    token
-  );
-  const defaultBranch = meta.default_branch;
-
-  const tree = await gh<{ tree: GitHubTreeEntry[]; truncated?: boolean }>(
-    `/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`,
-    token
-  );
+  const [tree, languageBytes] = await Promise.all([
+    gh<{ tree: GitHubTreeEntry[]; truncated?: boolean }>(
+      `/repos/${owner}/${repo}/git/trees/${sha}?recursive=1`,
+      token
+    ),
+    gh<Record<string, number>>(`/repos/${owner}/${repo}/languages`, token).catch(
+      () => ({}) as Record<string, number>
+    ),
+  ]);
 
   const kept = tree.tree.filter((e) => !isIgnoredPath(e.path));
   const shownTree = kept.slice(0, DIGEST_LIMITS.maxTreePaths);
@@ -283,25 +354,15 @@ export async function buildRepoDigest(
     .join("\n");
 
   const picks = pickInterestingFiles(kept);
-  const filesInlined: { path: string; content: string }[] = [];
-  for (const p of picks) {
-    const content = await fetchRawFile(owner, repo, defaultBranch, p.path, token);
-    if (content) filesInlined.push({ path: p.path, content });
-  }
-
-  let languageBytes: Record<string, number> = {};
-  try {
-    languageBytes = await gh<Record<string, number>>(
-      `/repos/${owner}/${repo}/languages`,
-      token
-    );
-  } catch {
-    languageBytes = {};
-  }
+  const fetched = await mapInBatches(picks, FILE_FETCH_CONCURRENCY, async (p) => ({
+    path: p.path,
+    content: await fetchRawFile(owner, repo, sha, p.path, token),
+  }));
+  const filesInlined = fetched.filter((f) => f.content.length > 0);
 
   const header = `# Repo: ${owner}/${repo}
 Default branch: ${defaultBranch}
-Description: ${meta.description || "(none)"}
+Description: ${head.description || "(none)"}
 Language bytes: ${JSON.stringify(languageBytes)}
 `;
 

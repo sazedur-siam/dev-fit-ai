@@ -63,4 +63,6 @@ export const COLLECTIONS = {
   developers: "developers",
   analyses: "analyses",
   rateLimits: "rateLimits",
+  repoDigests: "repoDigests",
+  repoRequirements: "repoRequirements",
 } as const;

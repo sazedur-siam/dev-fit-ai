@@ -21,6 +21,19 @@ export const ARCHETYPE_MATCH_SCORES = {
   oppositeSpecialist: 25, // frontend dev vs backend need (or reverse)
 } as const;
 
+/**
+ * How long a public repo's digest and Gemini requirement are reused for the same
+ * commit. The key includes the commit SHA, so a new push is never served stale;
+ * this only bounds storage.
+ */
+export const REPO_CACHE_TTL_DAYS = 7;
+
+/**
+ * Part of the requirement cache key. **Bump it whenever the analyzeRepo() prompt
+ * changes**, or cached requirements from the old prompt keep being served.
+ */
+export const REQUIREMENT_PROMPT_VERSION = "1";
+
 export const DIGEST_LIMITS = {
   maxTreePaths: 400,
   maxInlinedFiles: 20,

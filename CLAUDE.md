@@ -61,7 +61,9 @@ whole demo rests on the numbers being reproducible and inspectable.
 ```
 repoUrl
   → parseRepoUrl()            src/lib/github.ts
-  → buildRepoDigest()         3 REST calls + up to 20 raw file fetches
+  → getRepoHead()             2 REST calls: metadata + head commit SHA
+  → [cache]                   public repos only: requirement / digest per SHA
+  → buildRepoDigest()         2 REST calls + up to 20 raw file reads, 5 at a time
   → analyzeRepo()             src/lib/analyzer.ts  → Gemini #1 → RepoRequirement
   → rankCohort()              src/lib/scoring.ts   → pure, sorted by overall desc
   → explainRanking()          src/lib/analyzer.ts  → Gemini #2 → explanations
@@ -137,7 +139,7 @@ that look like bugs but are deliberate, and one that is a genuine wart:
 | `ADMIN_NAME` | No | Display name for the bootstrapped admin. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | No | Enables "Continue with Google". The provider isn't registered and the button is hidden when unset. Redirect URI: `<NEXTAUTH_URL>/api/auth/callback/google`. |
 | `GEMINI_API_KEY` | No | Fallback when a user hasn't saved their own. **Admin-created accounts only** — self-registered and Google accounts never get it. |
-| `GITHUB_TOKEN` | No | Same, for GitHub (same restriction). Unauthenticated GitHub is 60 req/hr; one digest costs 3 REST calls. |
+| `GITHUB_TOKEN` | No | Same, for GitHub (same restriction). Unauthenticated GitHub is 60 req/hr; an uncached run costs 4 REST calls (meta, SHA, tree, languages); a cached one costs 2. |
 | `GEMINI_MODEL` | No | Defaults to `gemini-3.6-flash`. |
 
 Never `throw` at module scope for a missing env var. `auth.ts` originally did, which
@@ -339,9 +341,21 @@ Both unblock only when the upstream plugins ship support. Re-check with
   [FitView.tsx](src/components/FitView.tsx) imports it. Change it there and both
   sides follow; never re-declare it locally. (`FitRanking`, the old dead copy, is
   gone.)
-- `buildRepoDigest()` fetches the up-to-20 files **sequentially** in a `for` loop.
-  That's the main latency cost of a request (5–20s end to end). Safe to parallelize
-  with `Promise.all`, just mind the rate limit.
+- **Public repos are cached per commit SHA** ([db/repoCache.ts](src/lib/db/repoCache.ts),
+  7-day TTL): the digest, and Gemini's requirement keyed by SHA + `GEMINI_MODEL` +
+  `REQUIREMENT_PROMPT_VERSION`. A requirement hit skips the file reads *and* Gemini
+  call #1, which also makes repeat runs on one commit reproducible. Three rules:
+  - **Bump `REQUIREMENT_PROMPT_VERSION`** in config.ts whenever the analyzeRepo
+    prompt changes, or the old prompt's answers keep being served for a week.
+  - **Private repos are never cached.** The key has no user in it, so a cached
+    private digest would be served to anyone pasting the same URL. `getRepoHead()`
+    treats a missing `private` flag as private.
+  - Only a complete Gemini reply (`isCacheableReply()`) is cached; one that only
+    survived through schema defaults is not pinned. Cache errors are logged and
+    treated as misses, never as failed requests.
+- Digest files are read **5 at a time** (`mapInBatches`) at the head SHA, not the
+  branch name, so a push mid-build can't mix versions. That took a 20-file digest
+  of this repo from ~10.7s to ~2.9s.
 - `FitView` fetches `/api/developers` separately from `/api/fit` purely to get names
   and archetypes for display; the fit response carries IDs only.
 - Gemini JSON parsing retries **once** with a stricter "return only JSON" reminder

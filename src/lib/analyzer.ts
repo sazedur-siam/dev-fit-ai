@@ -1,4 +1,13 @@
-import { buildRepoDigest } from "@/lib/github";
+import { buildRepoDigest, getRepoHead, parseRepoUrl, type RepoDigest } from "@/lib/github";
+import { GEMINI_MODEL, REQUIREMENT_PROMPT_VERSION } from "@/lib/config";
+import {
+  digestCacheKey,
+  getCachedDigest,
+  getCachedRequirement,
+  requirementCacheKey,
+  saveDigest,
+  saveRequirement,
+} from "@/lib/db/repoCache";
 import { geminiJSON } from "@/lib/gemini";
 import type {
   AnalyzeAndRankResult,
@@ -60,7 +69,43 @@ export function coerceExplanations(
   };
 }
 
-/** Ask Gemini for a RepoRequirement given a digest. Applies safe defaults. */
+/**
+ * Whether Gemini's raw reply was complete enough to cache. A reply that only
+ * survived through schema defaults would otherwise be pinned for a week.
+ */
+export function isCacheableReply(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+  const r = raw as Record<string, unknown>;
+  return (
+    Array.isArray(r.languages) &&
+    r.languages.length > 0 &&
+    ["frontend", "backend", "fullstack"].includes(r.primaryArchetypeNeeded as string) &&
+    typeof r.summary === "string" &&
+    r.summary.trim().length > 0
+  );
+}
+
+/**
+ * Cache reads and writes are an optimisation. Any failure is logged and treated
+ * as a miss, never as a failed request.
+ */
+async function bestEffort<T>(label: string, fn: () => Promise<T>): Promise<T | null> {
+  try {
+    return await fn();
+  } catch (err) {
+    console.error(`[repo cache] ${label} failed:`, err);
+    return null;
+  }
+}
+
+/**
+ * Ask Gemini for a RepoRequirement given a digest. Applies safe defaults.
+ *
+ * Public repos are cached per commit SHA: the digest (skips ~20 file reads) and
+ * the requirement for the current model + prompt version (skips Gemini call #1,
+ * and makes repeat runs on one commit return the same requirement). Private repos
+ * are never cached, because the cache key has no user in it.
+ */
 export async function analyzeRepo(
   repoUrl: string,
   creds: ResolvedCredentials
@@ -68,7 +113,29 @@ export async function analyzeRepo(
   requirement: RepoRequirement;
   digestMeta: { owner: string; repo: string; fileCount: number };
 }> {
-  const digestObj = await buildRepoDigest(repoUrl, creds.githubToken);
+  const { owner, repo } = parseRepoUrl(repoUrl);
+  const head = await getRepoHead(owner, repo, creds.githubToken);
+  const cacheable = !head.isPrivate;
+  const dKey = digestCacheKey(owner, repo, head.sha);
+  const rKey = requirementCacheKey(owner, repo, head.sha, GEMINI_MODEL, REQUIREMENT_PROMPT_VERSION);
+
+  if (cacheable) {
+    const hit = await bestEffort("read requirement", () => getCachedRequirement(rKey));
+    if (hit) {
+      return { requirement: hit.requirement, digestMeta: { owner, repo, fileCount: hit.fileCount } };
+    }
+  }
+
+  let digestObj: RepoDigest | null = cacheable
+    ? await bestEffort("read digest", () => getCachedDigest(dKey))
+    : null;
+  if (!digestObj) {
+    digestObj = await buildRepoDigest(owner, repo, head, creds.githubToken);
+    if (cacheable) {
+      const built = digestObj;
+      await bestEffort("save digest", () => saveDigest(dKey, built));
+    }
+  }
 
   const prompt = `You are a senior tech lead. Read the digest of a public GitHub repo below and describe what kind of developer this codebase needs.
 
@@ -97,6 +164,11 @@ ${digestObj.digest}
     languageBytes: digestObj.languageBytes,
     repoLabel: `${digestObj.owner}/${digestObj.repo}`,
   });
+
+  if (cacheable && isCacheableReply(raw)) {
+    const fileCount = digestObj.fileCount;
+    await bestEffort("save requirement", () => saveRequirement(rKey, requirement, fileCount));
+  }
 
   return {
     requirement,
